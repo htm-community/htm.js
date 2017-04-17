@@ -1,0 +1,50 @@
+# Default line ending behaviour, when users don't have core.autocrlf.
+* text=auto
+
+# Text files to be converted to native line endings on checkout.
+*.bat text
+*.cfg text
+*.cgi text
+*.conf text
+*.css text
+*.htm text
+*.html text
+*.ini text
+*.js text
+*.json text
+*.lock text
+*.log text
+*.markdown text
+*.md text
+*.meta text
+*.php text
+*.properties text
+*.sh text
+*.yml text
+*.xml text
+.buildpath
+.classpath text
+.gitattributes text
+.gitignore text
+.htaccess text
+.project
+LICENSE text
+LICENSES text
+README text
+README.md text
+RELEASE text
+
+# Files that are truly binary and should not be modified.
+*.doc binary
+*.docx binary
+*.gif binary
+*.gz binary
+*.ico binary
+*.jpg binary
+*.JPG binary
+*.jpeg binary
+*.pdf binary
+*.png binary
+*.zip binary
+.gitkeep binary
+

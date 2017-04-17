@@ -1,0 +1,33 @@
+# Local config files
+*.ini
+
+# Generated and temporary files
+*~
+*.bak
+*.tmp
+
+# Eclipse project files
+.settings/
+.externalToolBuilders/
+proguard/
+.buildpath
+.classpath
+.cproject
+.loadpath
+.metadata
+.project
+*.launch
+*.pydevproject
+local.properties
+
+# NetBeans project files
+build/
+dist/
+nbbuild/
+nbdist/
+nbproject/
+test/
+build.xml
+nbactions.xml
+nb-configuration.xml
+

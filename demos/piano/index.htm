@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>HTM Test</title>
+		<style type="text/css">
+			table {
+				border-collapse: collapse;
+				display: inline-table;
+			}
+			th {
+				text-align: right;
+			}
+			td {
+				text-align: left;
+				padding: 5px;
+			}
+			h3#initializing {
+				margin-top:16px;
+			}
+			canvas#input {
+				border: 1px solid grey;
+				margin-top: 32px;
+			}
+			canvas#layer {
+				border: 1px solid grey;
+				margin-top: 16px;
+			}
+			div.cell {
+				display:inline-block;
+				width:1px;
+				height:1px;
+				background-color: #ffffff;
+			}
+			div.cell.top {
+				border-top: 1px solid grey;
+			}
+			div.cell.bottom {
+				border-bottom: 1px solid grey;
+			}			
+			div.cell.left {
+				border-left: 1px solid grey;
+			}
+			div.cell.right {
+				border-right: 1px solid grey;
+			}			
+			div.cell.even {
+				background-color: #cccccc;
+			}
+			div.cell.predictive {
+				background-color: #ffff00;
+			}
+			div.cell.predictive.even {
+				background-color: #cccc00;
+			}
+			.active {
+				background-color: #ff0000 !important;
+			}
+			.active.even {
+				background-color: #cc0000 !important;
+			}
+			#keyboard_top {
+				width: 100%;
+			}
+			#keyboard_bottom {
+				width: 100%;
+				margin-top: -4px;
+			}
+			td.key {
+				cursor: pointer;
+				background-color: white;
+			}
+			td.key.hover{
+				background-color: lightgrey;
+			}
+			td.key_top {
+				border-top: 1px solid black;
+				border-left: 1px solid black;
+				border-right: 1px solid black;
+				width: 10%;
+			}
+			td.key_bottom {
+				border-bottom: 1px solid black;
+				border-left: 1px solid black;
+				border-right: 1px solid black;
+				height: 32px;
+				width: 20%;
+			}
+			td.key_black {
+				border-top: 1px solid black;
+				border-left: 1px solid black;
+				border-right: 1px solid black;
+				background-color: black;
+				width: 15%;
+			}
+			td.key_black.end {
+				width: 6%;
+			}
+			div#legend_active {
+				width: 8px;
+				height: 8px;
+				background-color: #FF0000;
+				display: inline-block;
+				margin-left: 8px;
+				margin-right: 8px;
+			}
+			div#legend_predictive {
+				width: 8px;
+				height: 8px;
+				background-color: #0000FF;
+				display: inline-block;
+				margin-left: 8px;
+				margin-right: 8px;
+			}
+		</style>
+	</head>
+	<body>
+		
+		<table id="layer_properties">
+			<thead>
+				<tr>
+					<th colspan=6 style="text-align: center"><h3>Layer Properties</h3></th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<th>Columns</th>
+					<td><input id="columnCount" type="number" min="1" max="1024" value="1024"></td>
+					<td><i>(1-1024)</i></td>
+					<th>Cells Per Column</th>
+					<td><input id="cellsPerColumn" type="number" min="1" max="32" value="32"></td>
+					<td><i>(1-32)</i></td>
+				</tr>
+				<tr>
+					<th>Activation Threshold</th>
+					<td><input id="activationThreshold" type="number" min="1" max="128" value="13"></td>
+					<td><i>(1-128)</i></td>
+					<th>Initial Permanence</th>
+					<td><input id="initialPermanence" type="number" min="1" max="100" value="50"></td>
+					<td><i>(1-100)</i></td>
+				</tr>
+				<tr>
+					<th>Connected Permanence</th>
+					<td><input id="connectedPermanence" type="number" min="1" max="100" value="50"></td>
+					<td><i>(1-100)</i></td>
+					<th>Minimum Threshold</th>
+					<td><input id="minThreshold" type="number" min="1" max="128" value="5"></td>
+					<td><i>(1-128)</i></td>
+				</tr>
+				<tr>
+					<th>Max New Synapse Count</th>
+					<td><input id="maxNewSynapseCount" type="number" min="1" max="32" value="16"></td>
+					<td><i>(1-32)</i></td>
+					<th>Permanence Increment</th>
+					<td><input id="permanenceIncrement" type="number" min="1" max="100" value="10"></td>
+					<td><i>(1-100)</i></td>
+				</tr>
+				<tr>
+					<th>Permanence Decrement</th>
+					<td><input id="permanenceDecrement" type="number" min="1" max="100" value="10"></td>
+					<td><i>(1-100)</i></td>
+					<th>Predicted Segment Decrement</th>
+					<td><input id="predictedSegmentDecrement" type="number" min="1" max="100" value="5"></td>
+					<td><i>(1-100)</i></td>
+				</tr>
+				<tr>
+					<th>Max Segments per Cell</th>
+					<td><input id="maxSegmentsPerCell" type="number" min="1" max="128" value="128"></td>
+					<td><i>(1-128)</i></td>
+					<th>Max Synapses per Segment</th>
+					<td><input id="maxSynapsesPerSegment" type="number" min="1" max="128" value="128"></td>
+					<td><i>(1-128)</i></td>
+				</tr>
+				<tr>
+					<th>Potential Percent</th>
+					<td><input id="potentialPercent" type="number" min="1" max="100" value="50"></td>
+					<td><i>(1-100)</i></td>
+					<th>Sparsity</th>
+					<td><input id="sparsity" type="number" min="1" max="100" value="2"></td>
+					<td><i>(1-100)</i></td>
+				</tr>
+			</tbody>
+		</table>
+		<div>
+			<button id="action" type="button">Begin</button>
+			<div id="legend_active"></div><span>Active</span>
+			<div id="legend_predictive"></div><span>Predictive</span>
+		</div>
+		<h3 id="initializing" style="display:none">Initializing...</h3>
+		<div>
+			<canvas id="layer" width=1024 height=32 style="display:none;">
+				Your browser does not support the canvas element.
+			</canvas>
+			<canvas id="input" width=1024 height=1 style="display:none;">
+			</canvas>
+		</div>
+		<table id="keyboard" style="display:none; width:300px;">
+			<thead></thead>
+			<tbody>
+				<tr>
+					<td colspan=3>
+						<table id="keyboard_top">
+							<thead></thead>
+							<tbody>
+								<tr>
+									<td class="key key_top key_c" data-key="c"></td>
+									<td class="key_black"></td>
+									<td class="key key_top key_d" data-key="d"></td>
+									<td class="key_black"></td>
+									<td class="key key_top key_e" data-key="e"></td>
+									<td class="key key_top key_f" data-key="f"></td>
+									<td class="key_black"></td>
+									<td class="key key_top key_g" data-key="g"></td>
+									<td class="key_black end"></td>
+								</tr>
+							</tbody>
+						</table>
+						<table id="keyboard_bottom">
+							<thead></thead>
+							<tbody>
+								<tr>
+									<td class="key key_bottom key_c" data-key="c"></td>
+									<td class="key key_bottom key_d" data-key="d"></td>
+									<td class="key key_bottom key_e" data-key="e"></td>
+									<td class="key key_bottom key_f" data-key="f"></td>
+									<td class="key key_bottom key_g" data-key="g"></td>
+								</tr>
+							</tbody>
+						</table>
+					</td>
+				</tr>
+			</tbody>
+		</table>
+		
+		<div id="predict" style="display:none;"><b>Prediction: </b><span id="prediction">(none)</span></div>
+		<div id="history" style="display:none;"></div>
+		
+		<script src="../assets/scripts/jquery.min.js"></script>
+		<script src="../../prototypes/synapse.prototype.js"></script>
+		<script src="../../prototypes/segment.prototype.js"></script>
+		<script src="../../prototypes/cell.prototype.js"></script>
+		<script src="../../prototypes/input.prototype.js"></script>
+		<script src="../../prototypes/column.prototype.js"></script>
+		<script src="../../prototypes/layer.prototype.js"></script>
+		<script src="../../htm.controller.js"></script>
+		<script type="text/javascript">
+		
+			// Handles to various canvas elements for drawing
+			var inputImg, inputPx, layerImg, layerPx;
+			var inputCanvas = document.getElementById( "input" );
+			var inputCtx = inputCanvas.getContext( "2d" );
+			var layerCanvas = document.getElementById( "layer" );
+			var layerCtx = layerCanvas.getContext( "2d" );
+			var inputGrid, layerGrid;
+			var cellHeight = 1;
+			
+			// Load the notes
+			var sounds = {};
+			loadSounds();
+			
+			// Controller for HTM functions
+			var htmController = new HTMController();
+			
+			$( document ).bind( "ready", function() {
+				
+				$( "#action" ).click( function() {
+					// User clicked the action button
+					if( $( this ).hasClass( "in_progress" ) ) {
+						// Stop the simulation
+						$( this ).html( "Begin" );
+						$( this ).removeClass( "in_progress" );
+						$( ".line" ).remove();
+						$( ".cell" ).remove();
+						$( "#history" ).hide();
+						$( "#predict" ).hide();
+						$( "#input" ).hide();
+						$( "#layer" ).hide();
+						$( "#keyboard" ).hide();
+						destroyLayer();
+					} else {
+						// Start the simulation
+						$( this ).html( "Stop" );
+						$( this ).addClass( "in_progress" );
+						$( "#action" ).hide();
+						$( "#initializing" ).show();
+						// Using setTimeout, so processing message has time to appear
+						setTimeout( function() {
+							createLayer();
+							$( "#initializing" ).hide();
+							$( "#action" ).show();
+							$( "#keyboard" ).show();
+							$( "#layer" ).show();
+							$( "#input" ).show();
+							$( "#predict" ).show();
+							$( "#history" ).show();
+						}, 50 );
+					}
+				});
+				
+				// Handle mouse events on the piano
+				$( "td.key" ).mouseenter( function() {
+					$( "td.key" ).removeClass( "hover" );
+					$( ".key_" + $( this ).attr( "data-key" ) ).addClass( "hover" );
+				});
+				$( "td.key" ).mouseleave( function() {
+					$( "td.key" ).removeClass( "hover" );
+				} );
+				$( "td.key" ).mousedown( function() {
+					$( "td.key" ).removeClass( "active" );
+					$( ".key_" + $( this ).attr( "data-key" ) ).addClass( "active" );
+					play( $( this ).attr( "data-key" ) );
+				});
+				$( "td.key" ).mouseup( function() {
+					$( "td.key" ).removeClass( "active" );
+				} );
+				
+				// Handle keyboard events on the piano
+				$( window ).keydown( function( e ) {
+					$( "td.key" ).removeClass( "active" );
+					var key = e.which;
+					switch( key ) {
+						case 67:
+							$( ".key_c" ).addClass( "active" );
+							play( 'c' );
+							break;
+						case 68:
+							$( ".key_d" ).addClass( "active" );
+							play( 'd' );
+							break;
+						case 69:
+							$( ".key_e" ).addClass( "active" );
+							play( 'e' );
+							break;
+						case 70:
+							$( ".key_f" ).addClass( "active" );
+							play( 'f' );
+							break;
+						case 71:
+							$( ".key_g" ).addClass( "active" );
+							play( 'g' );
+							break;
+					}
+				} );
+				$( window ).keyup( function( e ) {
+					$( "td.key" ).removeClass( "active" );				
+				} );
+				
+			} );
+			
+			
+			/**
+			* Constructs the layer's data structures and connections according to
+			* the specified parameters, and represents it as a table grid on the page
+			*/
+			function createLayer() {
+				var params = {};
+				$( 'input[type="number"]' ).each( function() {
+					params[ $( this ).attr( 'id' ) ] = parseInt( $( this ).val() );
+				});
+				
+				// Create a grid depiction of the input cells
+				inputCtx.canvas.width = 1024;
+				inputCtx.canvas.height = 1 * cellHeight;
+				inputGrid = createGridImage( 1024, 1, cellHeight, inputCtx );
+				inputCtx.putImageData( inputGrid, 0, 0 );
+				
+				// Create a grid depiction of the layer cells
+				layerCtx.canvas.width = params.columnCount;
+				layerCtx.canvas.height = params.cellsPerColumn * cellHeight;
+				layerGrid = createGridImage( params.columnCount, params.cellsPerColumn, cellHeight, layerCtx );
+				layerCtx.putImageData( layerGrid, 0, 0 );
+				
+				// Create the input cells and layer
+				htmController.clear();
+				htmController.createInputCells( 1024 );
+				htmController.createLayer( params );
+			}
+			
+			
+			/**
+			* Clears the data and DOM elements from the simulation
+			*/
+			function destroyLayer() {
+				// Remove DOM elements from the simulation
+				$( "#layer-body" ).remove();
+				$( "#history" ).text( "" );
+				$( "#prediction" ).text( "(none)" );
+				
+				// Clear the input cells and layer
+				htmController.clear();
+			}
+			
+			
+			/*
+			* Play a note
+			*/
+			function play( note ) {
+				// Play the audio file for this note
+				sounds[note].pause();
+				sounds[note].currentTime = 0;
+				sounds[note].play();
+				
+				// Add this note to the history
+				$( "#history" ).append( note.toUpperCase() + " " );
+				
+				// Spatial Pooling (SP) phase
+				htmController.spatialPooling( 0, notes[note], true );
+				
+				// Temporal Memory (TM) phase
+				htmController.temporalMemory( 0, true );
+				
+				// Update the canvases displaying input and layer cell states
+				drawInputCells();
+				drawLayerCells();
+			}
+			
+			/*
+			* Load the audio files
+			*/
+			function loadSounds() {
+				sounds['c'] = document.createElement( 'audio' );
+				sounds['c'].setAttribute( 'src', '../assets/media/C.mp3' );
+				sounds['d'] = document.createElement( 'audio' );
+				sounds['d'].setAttribute( 'src', '../assets/media/D.mp3' );
+				sounds['e'] = document.createElement( 'audio' );
+				sounds['e'].setAttribute( 'src', '../assets/media/E.mp3' );
+				sounds['f'] = document.createElement( 'audio' );
+				sounds['f'].setAttribute( 'src', '../assets/media/F.mp3' );
+				sounds['g'] = document.createElement( 'audio' );
+				sounds['g'].setAttribute( 'src', '../assets/media/G.mp3' );
+			}
+			
+			/*
+			* Draw a colored line between absolute coordinates
+			*/
+			function drawLine( x1, y1, x2, y2, color ) {
+				var a = x1 - x2,
+					b = y1 - y2,
+					c = Math.sqrt( a * a + b * b );
+				var sx = ( x1 + x2 ) / 2,
+					sy = ( y1 + y2 ) / 2;
+				var x = sx - c / 2,
+					y = sy;
+				var angle = Math.PI - Math.atan2( -b, a );
+				
+				$( "<div></div>" )
+					.css( 'border-top', '1px solid ' + color )
+					.css( 'width', c + 'px' )
+					.css( 'height', '0px' )
+					.css( '-moz-transform', 'rotate(' + angle + 'rad)' )
+					.css( '-webkit-transform', 'rotate(' + angle + 'rad)' )
+					.css( '-o-transform', 'rotate(' + angle + 'rad)' )
+					.css( '-ms-transform', 'rotate(' + angle + 'rad)' )
+					.css( 'position', 'absolute' )
+					.css( 'top', y + 'px' )
+					.css( 'left', x + 'px' )
+					.addClass( 'line' )
+					.appendTo( 'body' );
+			}
+			
+			/*
+			* Draw an image for use in depicting cells as a grid of grey/white pixels
+			*/
+			function createGridImage( width, height, cellHeight, context ) {
+				var i, w, x, y, z;
+				var gridImage = context.createImageData( width, ( height * cellHeight ) );
+				var gridData = gridImage.data;
+				for( y = 0; y < height; y++ ) {
+					for( z = 0; z < cellHeight; z++ ) {
+						for( x = 0; x < width; x++ ) {
+							i = ( ( ( ( y * cellHeight ) + z ) * width ) + x ) * 4;
+							w = ( y % 2 ) + x;
+							if( ( w % 2 ) == 0 ) {
+								gridData[i] = 204;
+								gridData[i + 1] = 204;
+								gridData[i + 2] = 204;
+							} else {
+								gridData[i] = 255;
+								gridData[i + 1] = 255;
+								gridData[i + 2] = 255;
+							}
+							gridData[i + 3] = 255;
+						}
+					}
+				}
+				return gridImage;
+			}
+			
+			/*
+			* Draw the predictive and active cells on the input grid canvas
+			*/
+			function drawInputCells() {
+				var x, input;
+				inputCellsImage = inputCtx.createImageData( inputGrid );
+				inputCellsImage.data.set( inputGrid.data );
+				for( x = 0; x < 1024; x++ ) {
+					input = htmController.input.cells[x];
+					if( input.active || input.predictive ) {
+						drawCell( x, 0, 1024, inputCellsImage, input.active, input.predictive );
+					}
+				}
+				inputCtx.putImageData( inputCellsImage, 0, 0 );
+			}
+			
+			/*
+			* Draw the predictive and active cells on the layer grid canvas
+			*/
+			function drawLayerCells() {
+				var x, y, column, cell;
+				var layer = htmController.layers[0];
+				layerCellsImage = layerCtx.createImageData( layerGrid );
+				layerCellsImage.data.set( layerGrid.data );
+				for( x = 0; x < layer.columns.length; x++ ) {
+					column = layer.columns[x];
+					for( y = 0; y < column.cells.length; y++ ) {
+						cell = column.cells[y];
+						if( cell.active || cell.predictive ) {
+							drawCell( x, y, layer.columns.length, layerCellsImage, cell.active, cell.predictive );
+						}
+					}
+				}
+				layerCtx.putImageData( layerCellsImage, 0, 0 );
+			}
+			
+			/*
+			* Draw a cell onto a grid canvas (active = red, predictive = blue) 
+			*/
+			function drawCell( x, y, width, gridImage, active, predictive ) {
+				var i1, i2, i3, i4;  // Additional pixel indexes to draw an X over the cell
+				for( z = 0; z < cellHeight; z++ ) {
+					i = ( ( ( ( y * cellHeight ) + z ) * width ) + x ) * 4;
+					i1 = i - ( width * 4 ) - 4;
+					i2 = i1 + 8;
+					i3 = i + ( width * 4 ) - 4;
+					i4 = i3 + 8;
+					
+					if( predictive && !active ) {
+						// Cell is predictive but not active -- make it blue
+						gridImage.data[i] = 0;
+						gridImage.data[i + 1] = 0;
+						gridImage.data[i + 2] = 255;
+						if( i1 >= 0 ) {
+							gridImage.data[i1] = 0;
+							gridImage.data[i1 + 1] = 0;
+							gridImage.data[i1 + 2] = 255;
+						}
+						if( i2 >= 0 ) {
+							gridImage.data[i2] = 0;
+							gridImage.data[i2 + 1] = 0;
+							gridImage.data[i2 + 2] = 255;
+						}
+						if( i3 < gridImage.data.length ) {
+							gridImage.data[i3] = 0;
+							gridImage.data[i3 + 1] = 0;
+							gridImage.data[i3 + 2] = 255;
+						}
+						if( i4 < gridImage.data.length ) {
+							gridImage.data[i4] = 0;
+							gridImage.data[i4 + 1] = 0;
+							gridImage.data[i4 + 2] = 255;
+						}
+					} else if( active ) {
+						// Cell is active -- make it red
+						gridImage.data[i] = 255;
+						gridImage.data[i + 1] = 0;
+						gridImage.data[i + 2] = 0;
+						if( i1 >= 0 ) {
+							gridImage.data[i1] = 255;
+							gridImage.data[i1 + 1] = 0;
+							gridImage.data[i1 + 2] = 0;
+						}
+						if( i2 >= 0 ) {
+							gridImage.data[i2] = 255;
+							gridImage.data[i2 + 1] = 0;
+							gridImage.data[i2 + 2] = 0;
+						}
+						if( i3 < gridImage.data.length ) {
+							gridImage.data[i3] = 255;
+							gridImage.data[i3 + 1] = 0;
+							gridImage.data[i3 + 2] = 0;
+						}
+						if( i4 < gridImage.data.length ) {
+							gridImage.data[i4] = 255;
+							gridImage.data[i4 + 1] = 0;
+							gridImage.data[i4 + 2] = 0;
+						}
+					}
+					gridImage.data[i + 3] = 255;
+					if( i1 >= 0 ) {
+						gridImage.data[i1 + 3] = 255;
+					}
+					if( i2 >= 0 ) {
+						gridImage.data[i2 + 3] = 255;
+					}
+					if( i3 < gridImage.data.length ) {
+						gridImage.data[i3 + 3] = 255;
+					}
+					if( i4 < gridImage.data.length ) {
+						gridImage.data[i4 + 3] = 255;
+					}
+				}
+			}
+			
+			// Inputs for the notes (dense array of indexes to the 1's in an SDR)
+			var notes = {
+				'c' : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+				'd' : [252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271],
+				'e' : [502, 503, 504, 505, 506, 507, 508, 509, 510, 511, 512, 513, 514, 515, 516, 517, 518, 519, 520, 521],
+				'f' : [752, 753, 754, 755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768, 769, 770, 771],
+				'g' : [1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1021]
+			}
+		</script>
+	</body>
+</html>
