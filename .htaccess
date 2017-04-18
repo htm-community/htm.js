@@ -1,0 +1,13 @@
+Options -Indexes
+<FilesMatch "\.(ico|pdf|flv)$">
+Header set Cache-Control "max-age=86400, public"
+</FilesMatch>
+<FilesMatch "\.(jpg|jpeg|png|gif|swf)$">
+Header set Cache-Control "max-age=3600, public"
+</FilesMatch>
+<FilesMatch "\.(xml|txt|css|js)$">
+Header set Cache-Control "max-age=900, proxy-revalidate"
+</FilesMatch>
+<FilesMatch "\.(html|htm|php)$">
+Header set Cache-Control "max-age=900, private, proxy-revalidate"
+</FilesMatch>
