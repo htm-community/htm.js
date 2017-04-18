@@ -372,7 +372,7 @@ function HTMController() {
 				{
 					if( cell.active ) {
 						// Correct prediction.  Train it to better align with activity.
-						my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer );
+						my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer.activeCellHistory[0], layer.params );
 					} else {
 						// Wrong prediction.  Degrade connections on this segment.
 						segment = cell.column.bestDistalSegmentHistory[0];
@@ -402,7 +402,7 @@ function HTMController() {
 							&& cell.column.bestDistalSegmentHistory[0].activeSynapsesHistory[0].length > 0 )
 						{
 							// Found a matching distal segment.  Train it to better align with activity.
-							my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer );
+							my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer.activeCellHistory[0], layer.params );
 						} else {
 							// No matching distal segment.  Create a new one.
 							segment = new Segment( layer.DISTAL, cell, cell.column );
@@ -421,24 +421,24 @@ function HTMController() {
 	}
 	
 	/**
-	 * Trains a segment to better match a layer's cell activity in the previous timestep.
+	 * Trains a segment of any type to better match the specified active cells.
 	 * Active synapses are enforced, inactive synapses are degraded, and new synapses are formed
-	 * with a random sampling of active cells from previous timestep, up to max new synapses.
+	 * with a random sampling of the active cells, up to max new synapses.
 	 */
-	this.trainSegment = function( segment, layer ) {
+	this.trainSegment = function( segment, activeCells, params ) {
 		var s, i, synapse, segments, segmentIndex, lruSegmentIndex;
-		var randomIndexes = my.randomIndexes( layer.activeCellHistory[0].length, layer.params.maxNewSynapseCount, false );
+		var randomIndexes = my.randomIndexes( activeCells.length, params.maxNewSynapseCount, false );
 		var inactiveSynapses = segment.synapses.slice();  // Inactive synapses (will remove active ones below)
 		// Enforce synapses that were active
 		for( s = 0; s < segment.activeSynapsesHistory[0].length; s++ ) {
 			synapse = segment.activeSynapsesHistory[0][s];
-			synapse.permanence += layer.params.permanenceIncrement;
+			synapse.permanence += params.permanenceIncrement;
 			if( synapse.permanence > 100 ) {
 				synapse.permanence = 100;
 			}
 			// Remove cell from random sampling if present (prevents duplicate connections)
 			for( i = 0; i < randomIndexes.length; i++ ) {
-				if( layer.activeCellHistory[0][randomIndexes[i]].index == synapse.cellTx.index ) {
+				if( activeCells[randomIndexes[i]].index == synapse.cellTx.index ) {
 					// Cell is in the random sampling, remove it
 					randomIndexes.splice( i, 1 );
 			        break;
@@ -456,7 +456,7 @@ function HTMController() {
 		// Degrade synapses that were not active
 		for( s = 0; s < inactiveSynapses.length; s++ ) {
 			synapse = inactiveSynapses[s];
-			synapse.permanence -= layer.params.permanenceDecrement;
+			synapse.permanence -= params.permanenceDecrement;
 			if( synapse.permanence < 0 ) {
 				synapse.permanence = 0;
 			}
@@ -471,9 +471,9 @@ function HTMController() {
 		}
 		// Connect segment with random sampling of previously active cells, up to max new synapse count
 		for( i = 0; i < randomIndexes.length; i++ ) {
-			if( segment.synapses.length >= layer.params.maxSynapsesPerSegment ) {
+			if( segment.synapses.length >= params.maxSynapsesPerSegment ) {
 				// Cannot add any more synapses to this segment.  Check if we can add a new segment.
-				if( segments.length >= layer.params.maxSegmentsPerCell ) {
+				if( segments.length >= params.maxSegmentsPerCell ) {
 					// Cannot add any more segments to this cell.  Select least recently used and remove it.
 					segmentIndex = Math.floor( Math.random() * segments.length );
 					lruSegmentIndex = segmentIndex;  // Start with a random segment index
@@ -494,7 +494,7 @@ function HTMController() {
 				segment.lastUsedTimestep = my.timestep;
 			}
 			// Add new synapse to this segment
-			synapse = new Synapse( layer.activeCellHistory[0][randomIndexes[i]], segment, layer.params.initialPermanence );
+			synapse = new Synapse( activeCells[randomIndexes[i]], segment, params.initialPermanence );
 		}
 	}
 	
