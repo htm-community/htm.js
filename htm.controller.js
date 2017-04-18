@@ -426,7 +426,7 @@ function HTMController() {
 	 * with a random sampling of active cells from previous timestep, up to max new synapses.
 	 */
 	this.trainSegment = function( segment, layer ) {
-		var s, i, synapse, segmentIndex, lruSegmentIndex;
+		var s, i, synapse, segments, segmentIndex, lruSegmentIndex;
 		var randomIndexes = my.randomIndexes( layer.activeCellHistory[0].length, layer.params.maxNewSynapseCount, false );
 		var inactiveSynapses = segment.synapses.slice();  // Inactive synapses (will remove active ones below)
 		// Enforce synapses that were active
@@ -461,28 +461,36 @@ function HTMController() {
 				synapse.permanence = 0;
 			}
 		}
+		// Select the relevant list of segments, based on type
+		if( segment.type == segment.DISTAL ) {
+			segments = segment.cellRx.distalSegments;
+		} else if( segment.type == segment.APICAL ) {
+			segments = segment.cellRx.apicalSegments;
+		} else {
+			segments = segment.cellRx.proximalSegments;
+		}
 		// Connect segment with random sampling of previously active cells, up to max new synapse count
 		for( i = 0; i < randomIndexes.length; i++ ) {
 			if( segment.synapses.length >= layer.params.maxSynapsesPerSegment ) {
 				// Cannot add any more synapses to this segment.  Check if we can add a new segment.
-				if( segment.cellRx.distalSegments.length >= layer.params.maxSegmentsPerCell ) {
+				if( segments.length >= layer.params.maxSegmentsPerCell ) {
 					// Cannot add any more segments to this cell.  Select least recently used and remove it.
-					segmentIndex = Math.floor( Math.random() * segment.cellRx.distalSegments.length );
+					segmentIndex = Math.floor( Math.random() * segments.length );
 					lruSegmentIndex = segmentIndex;  // Start with a random segment index
 					// Loop through segments to find least recently used
-					for( s = 0; s < segment.cellRx.distalSegments.length; s++ ) {
+					for( s = 0; s < segments.length; s++ ) {
 						segmentIndex++;
-						if( segmentIndex >=  segment.cellRx.distalSegments.length ) {
+						if( segmentIndex >=  segments.length ) {
 							segmentIndex = 0;  // Wrap back around to beginning of list
 						}
 						// Check if this segment is less recently used than selected one
-						if( segment.cellRx.distalSegments[segmentIndex].lastUsedTimestep < segment.cellRx.distalSegments[lruSegmentIndex].lastUsedTimestep ) {
+						if( segments[segmentIndex].lastUsedTimestep < segments[lruSegmentIndex].lastUsedTimestep ) {
 							lruSegmentIndex = segmentIndex;  // Used less recently.. select this one instead
 						}
 					}
 				}
 				// Add new segment to this cell
-				segment = new Segment( layer.DISTAL, segment.cellRx, segment.cellRx.column );
+				segment = new Segment( segment.type, segment.cellRx, segment.cellRx.column );
 				segment.lastUsedTimestep = my.timestep;
 			}
 			// Add new synapse to this segment
