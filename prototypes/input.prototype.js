@@ -1,6 +1,6 @@
 /**
- * An input consist of a collection of cells and indexes of the active and predictive
- * cells in the collection.
+ * An input consist of a collection of cells and indexes of the active, predictive,
+ * and learning cells in the collection.
  * 
  */
 function Input( cells ) {

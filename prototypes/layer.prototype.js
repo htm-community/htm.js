@@ -106,8 +106,7 @@ function Layer() {
 	
 	/**
 	 * This function must be called first.  If params are not specified,
-	 * defaults will be used.  If distalLayer is not specified, distal
-	 * connections will form within this same layer.
+	 * defaults will be used.
 	 * 
 	 * Note: To skip SP, set param "skipSpatialPooling" = true, and then
 	 * manually create columns with addColumn() after calling initialize()
