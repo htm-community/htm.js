@@ -27,10 +27,6 @@ function Layer() {
 	this.learningCellHistory = []; // Reverse-order history of learning cells
 	this.predictiveCellHistory = []; // Reverse-order history of predictive cells
 	
-	this.proximalInputCells = []; // Reference to cells which provide feed-forward input
-	this.distalInputCells = [];   // Reference to cells which provide distal input
-	this.apicalInputCells = [];   // Reference to cells which provide apical input
-	
 	this.defaultParams = {
 		'columnCount'               :  2048,
 		'cellsPerColumn'            :    32,
@@ -57,13 +53,13 @@ function Layer() {
 	 * establishes randomly distributed proximal connections with the
 	 * input cells.
 	 */
-	this.addColumn = function() {
+	this.addColumn = function( inputCells ) {
 		var y, z, i, p, perm, cell, synapse;
 		var column = new Column( my.columns.length, my.columns.length * my.params.cellsPerColumn, my.params.cellsPerColumn, my );
 		
 		// Randomly connect columns to input cells
 		if( !my.params.skipSpatialPooling ) {
-			for( i = 0; i < my.inputCells.length; i++ ) {
+			for( i = 0; i < inputCells.length; i++ ) {
 				p = Math.floor( Math.random() * 100 );
 				if( p < my.params.potentialPercent ) {
 					perm = Math.floor( Math.random() * 100 );
@@ -71,7 +67,7 @@ function Layer() {
 						// Start with weak connections (for faster initial learning)
 						perm = my.params.connectedPermanence;
 					}
-					synapse = new Synapse( my.inputCells[i], column.proximalSegment, perm );
+					synapse = new Synapse( inputCells[i], column.proximalSegment, perm );
 				}
 			}
 		}
@@ -96,7 +92,6 @@ function Layer() {
 		// Clear all arrays;
 		my.cells = [];
 		my.columns = [];
-		my.inputCells = [];
 		
 		my.activeColumns = [];
 		my.activeCells = [];
@@ -118,8 +113,6 @@ function Layer() {
 		
 		my.clear();
 		
-		my.inputCells = inputCells;
-		
 		// Override default params with any provided
 		if( ( typeof params !== 'undefined' ) && ( params !== null ) ) {
 			for( property in params ) {
@@ -131,7 +124,7 @@ function Layer() {
 		
 		if( !my.params.skipSpatialPooling ) {
 			for( c = 0; c < my.params.columnCount; c++ ) {
-				my.addColumn();
+				my.addColumn( inputCells );
 			}
 		}
 	}

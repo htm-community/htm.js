@@ -41,9 +41,9 @@ function HTMController() {
 	 * This function generates a new layer and adds it to the array.
 	 * Should only be called after creating the input array.
 	 */
-	this.createLayer = function( params, inputCells ) {
+	this.createLayer = function( params ) {
 		var layer = new Layer();
-		layer.initialize( params, ( ( typeof inputCells === 'undefined' ) ? my.input.cells : inputCells ) );
+		layer.initialize( params, my.input.cells );
 		my.layers.push( layer );
 		return my;
 	}
