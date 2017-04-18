@@ -16,6 +16,7 @@ function Segment( type, cellRx, column ) {
 	this.cellRx = cellRx;  // Receiving cell
 	this.column = ( ( typeof column === 'undefined' ) ? null : column );
 	
+	this.lastUsedTimestep = 0;  // Used to remove least recently used segement when reaching max segments per cell
 	this.synapses = [];  // Connections to axons of transmitting cells
 	this.activeSynapses = [];  // both connected and potential synapses
 	this.connectedSynapses = [];  // connected synapses only

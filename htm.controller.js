@@ -8,6 +8,8 @@ function HTMController() {
 	this.input = new Input();
 	this.layers = [];
 	
+	this.timestep = 0; // Used for tracking least recently used resources
+	
 	/**
 	 * This function clears all layers and the collection of input cells
 	 */
@@ -130,6 +132,8 @@ function HTMController() {
 	this.temporalMemory = function( layerIdx, learningEnabled ) {
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
+		
+		my.timestep++;
 		
 		// Phase 1: Activate
 		my.tmActivate( layer, learn );
@@ -294,7 +298,8 @@ function HTMController() {
 			cell = layer.activeCells[i];
 			for( c = 0; c < cell.axonSynapses.length; c++ ) {
 				synapse = cell.axonSynapses[c];
-				// Update segment score
+				synapse.segment.lastUsedTimestep = my.timestep; // Update segment's last used timestep
+				// Add to segment's active synapses list
 				synapse.segment.activeSynapses.push( synapse );
 				if( synapse.permanence >= layer.params.connectedPermanence ) {
 					synapse.segment.connectedSynapses.push( synapse );
@@ -401,6 +406,7 @@ function HTMController() {
 						} else {
 							// No matching distal segment.  Create a new one.
 							segment = new Segment( layer.DISTAL, cell, cell.column );
+							segment.lastUsedTimestep = my.timestep;
 							// Connect segment with random sampling of previously active cells, up to max new synapse count
 							randomIndexes = my.randomIndexes( layer.learningCellHistory[0].length, layer.params.maxNewSynapseCount, false );
 							for( c = 0; c < randomIndexes.length; c++ ) {
@@ -420,7 +426,7 @@ function HTMController() {
 	 * with a random sampling of active cells from previous timestep, up to max new synapses.
 	 */
 	this.trainSegment = function( segment, layer ) {
-		var s, i;
+		var s, i, synapse, segmentIndex, lruSegmentIndex;
 		var randomIndexes = my.randomIndexes( layer.activeCellHistory[0].length, layer.params.maxNewSynapseCount, false );
 		var inactiveSynapses = segment.synapses.slice();  // Inactive synapses (will remove active ones below)
 		// Enforce synapses that were active
@@ -458,9 +464,28 @@ function HTMController() {
 		// Connect segment with random sampling of previously active cells, up to max new synapse count
 		for( i = 0; i < randomIndexes.length; i++ ) {
 			if( segment.synapses.length >= layer.params.maxSynapsesPerSegment ) {
-				// Cannot add any more synapses to this segment, create a new one
+				// Cannot add any more synapses to this segment.  Check if we can add a new segment.
+				if( segment.cellRx.distalSegments.length >= layer.params.maxSegmentsPerCell ) {
+					// Cannot add any more segments to this cell.  Select least recently used and remove it.
+					segmentIndex = Math.floor( Math.random() * segment.cellRx.distalSegments.length );
+					lruSegmentIndex = r;  // Start with a random segment index
+					// Loop through segments to find least recently used
+					for( s = 0; s < segment.cellRx.distalSegments.length; s++ ) {
+						segmentIndex++;
+						if( segmentIndex >=  segment.cellRx.distalSegments.length ) {
+							segmentIndex = 0;  // Wrap back around to beginning of list
+						}
+						// Check if this segment is less recently used than selected one
+						if( segment.cellRx.distalSegments[segmentIndex].lastUsedTimestep < segment.cellRx.distalSegments[lruSegmentIndex].lastUsedTimestep ) {
+							lruSegmentIndex = segmentIndex;  // Used less recently.. select this one instead
+						}
+					}
+				}
+				// Add new segment to this cell
 				segment = new Segment( layer.DISTAL, segment.cellRx, segment.cellRx.column );
+				segment.lastUsedTimestep = my.timestep;
 			}
+			// Add new synapse to this segment
 			synapse = new Synapse( layer.activeCellHistory[0][randomIndexes[i]], segment, layer.params.initialPermanence );
 		}
 	}
