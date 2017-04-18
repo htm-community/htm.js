@@ -468,7 +468,7 @@ function HTMController() {
 				if( segment.cellRx.distalSegments.length >= layer.params.maxSegmentsPerCell ) {
 					// Cannot add any more segments to this cell.  Select least recently used and remove it.
 					segmentIndex = Math.floor( Math.random() * segment.cellRx.distalSegments.length );
-					lruSegmentIndex = r;  // Start with a random segment index
+					lruSegmentIndex = segmentIndex;  // Start with a random segment index
 					// Loop through segments to find least recently used
 					for( s = 0; s < segment.cellRx.distalSegments.length; s++ ) {
 						segmentIndex++;
