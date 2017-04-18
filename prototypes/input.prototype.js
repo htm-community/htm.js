@@ -4,17 +4,28 @@
  * 
  */
 function Input( cells ) {
+	var my = this;
+	
 	this.cells = cells;
-	this.activeIndexes = [];
-	this.predictiveIndexes = [];
+	this.activeCells = [];     // Array of only the active cells
+	this.learningCells = [];   // Array of only the learning cells
+	this.predictiveCells = []; // Array of only the predictive cells
+
+	this.activeCellHistory = [];     // Reverse-order history of active cells
+	this.learningCellHistory = [];   // Reverse-order history of learning cells
+	this.predictiveCellHistory = []; // Reverse-order history of predictive cells
 	
 	/**
 	 * This function clears all arrays
 	 */
 	this.clear = function() {
-		this.cells = cells;
-		this.activeIndexes = [];
-		this.predictiveIndexes = [];
+		my.cells = [];
+		my.activeCells = [];
+		my.predictiveCells = [];
+		my.learningCells = [];
+		my.activeCellHistory = [];
+		my.learningCellHistory = [];
+		my.predictiveCellHistory = [];
 	}
 	
 }

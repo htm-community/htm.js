@@ -53,18 +53,37 @@ function HTMController() {
 	 * and if learning is enabled, adjusts the columns to better match the input.
 	 */
 	this.spatialPooling = function( layerIdx, activeInputSDR, learningEnabled ) {
-		var c, i, synapse, column;
+		var c, i, synapse, column, cell;
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
 		
 		// Determine the best columns to become active for this input
 		
-		// Clear out previous input cell states
-		for( i = 0; i < layer.inputCells.length; i++ ) {
-			layer.inputCells[i].active = false;
-			layer.inputCells[i].predictive = false;
-			layer.inputCells[i].learning = false;
+		// Save previously active input cells
+		my.input.activeCellHistory.unshift( my.input.activeCells );
+		if( my.input.activeCellHistory.length > layer.params.historyLength ) {
+			my.input.activeCellHistory.length = layer.params.historyLength;
 		}
+		my.input.predictiveCellHistory.unshift( my.input.predictiveCells );
+		if( my.input.predictiveCellHistory.length > layer.params.historyLength ) {
+			my.input.predictiveCellHistory.length = layer.params.historyLength;
+		}
+		my.input.learningCellHistory.unshift( my.input.learningCells );
+		if( my.input.learningCellHistory.length > layer.params.historyLength ) {
+			my.input.learningCellHistory.length = layer.params.historyLength;
+		}
+		
+		// Clear input cell states
+		my.input.activeCells = [];
+		my.input.predictiveCells = [];
+		my.input.learningCells = [];
+		for( i = 0; i < my.input.cells.length; i++ ) {
+			cell = my.input.cells[i];
+			cell.active = false;
+			cell.predictive = false;
+			cell.learning = false;
+		}
+		
 		// Reset the column scores
 		for( i = 0; i < layer.columns.length; i++ ) {
 			layer.columns[i].score = 0;
@@ -72,10 +91,15 @@ function HTMController() {
 		// Increase score of each column that is connected to an active input cell
 		for( c = 0; c < activeInputSDR.length; c++ ) {
 			i = activeInputSDR[c];
-			input = layer.inputCells[i];
-			input.active = true;
-			for( i = 0; i < input.axonSynapses.length; i++ ) {
-				synapse = input.axonSynapses[i];
+			cell = my.input.cells[i];
+			cell.active = true;
+			my.input.activeCells.push( cell );
+			if( learn ) {
+				cell.learning = true;
+				my.input.learningCells.push( cell );
+			}
+			for( i = 0; i < cell.axonSynapses.length; i++ ) {
+				synapse = cell.axonSynapses[i];
 				if( synapse.permanence >= layer.params.connectedPermanence ) {
 					synapse.segment.column.score++;
 				}
@@ -312,12 +336,14 @@ function HTMController() {
 							} else if( synapse.segment.type == layer.APICAL ) {
 								synapse.segment.cellRx.apicalLearnSegment = synapse.segment;
 							}
-							layer.predictiveCells.push( synapse.segment.cellRx );
+							if( ( typeof synapse.segment.cellRx.column !== 'undefined' ) && ( synapse.segment.cellRx.column !== null ) ) {
+								synapse.segment.cellRx.column.layer.predictiveCells.push( synapse.segment.cellRx );
+							}
 						}
 					}
 				}
 				// If cell is in a column, update best matching segment references
-				if( typeof synapse.segment.cellRx.column !== 'undefined' ) {
+				if( ( typeof synapse.segment.cellRx.column !== 'undefined' ) && ( synapse.segment.cellRx.column !== null ) ) {
 					column = synapse.segment.cellRx.column;
 					// Save a reference to the best matching distal and apical segments in the column
 					if( synapse.segment.type === layer.DISTAL ) {
@@ -421,6 +447,69 @@ function HTMController() {
 	}
 	
 	/**
+	 * This function allows the input cells to grow apical connections with the active cells in
+	 * the specified layer, allowing next inputs to be predicted.  This is designed to replace
+	 * the heavier-weight classifier logic for making predictions one timestep in the future.
+	 */
+	this.inputLearn = function( layerIdx ) {
+		var cell;
+		var layer = my.layers[layerIdx];
+		
+		// Enforce correct predictions, degrade wrong predictions
+		if( layer.activeCellHistory.length > 0 ) {
+			for( i = 0; i < my.input.predictiveCellHistory[0].length; i++ ) {
+				cell = my.input.predictiveCellHistory[0][i];
+				if( cell.active ) {
+					// Correct prediction.  Train it to better align with activity.
+					my.trainSegment( cell.apicalLearnSegment, layer.activeCellHistory[0], layer.params );
+				} else {
+					// Wrong prediction.  Degrade connections on this segment.
+					for( c = 0; c < cell.apicalLearnSegment.synapses.length; c++ ) {
+						synapse = cell.apicalLearnSegment.synapses[c];
+						synapse.permanence -= layer.params.predictedSegmentDecrement;
+						if( synapse.permanence < 0 ) {
+							synapse.permanence = 0;
+						}
+					}
+				}
+				cell.learning = false;  // Remove learning flag, so cell doesn't get double-trained
+			}
+		}
+		// Loop through remaining cells which have been flagged for learning
+		if( layer.learningCellHistory.length > 0 ) {
+			for( i = 0; i < my.input.learningCells.length; i++ ) {
+				cell = my.input.learningCells[i];
+				// Make sure we haven't already trained this cell
+				if( cell.learning ) {
+					// We haven't trained this cell yet.  Check if it has a matching apical segment
+					if( cell.apicalLearnSegment !== null ) {
+						// Found a matching apical segment.  Train it to better align with activity.
+						my.trainSegment( cell.apicalLearnSegment, layer.activeCellHistory[0], layer.params );
+					} else {
+						// No matching apical segment.  Create a new one.
+						segment = new Segment( layer.APICAL, cell );
+						cell.apicalLearnSegment = segment;
+						segment.lastUsedTimestep = my.timestep;
+						// Connect segment with random sampling of previously active cells, up to max new synapse count
+						randomIndexes = my.randomIndexes( layer.learningCellHistory[0].length, layer.params.maxNewSynapseCount, false );
+						for( c = 0; c < randomIndexes.length; c++ ) {
+							synapse = new Synapse( layer.learningCellHistory[0][randomIndexes[c]], segment, layer.params.initialPermanence );
+						}
+					}
+					cell.learning = false;
+				}
+			}
+		}
+		// Remember input cells that are in predictive state
+		for( i = 0; i < my.input.cells.length; i++ ) {
+			cell = my.input.cells[i];
+			if( cell.predictive ) {
+				my.input.predictiveCells.push( cell );
+			}
+		}
+	}
+	
+	/**
 	 * Trains a segment of any type to better match the specified active cells.
 	 * Active synapses are enforced, inactive synapses are degraded, and new synapses are formed
 	 * with a random sampling of the active cells, up to max new synapses.
@@ -430,27 +519,29 @@ function HTMController() {
 		var randomIndexes = my.randomIndexes( activeCells.length, params.maxNewSynapseCount, false );
 		var inactiveSynapses = segment.synapses.slice();  // Inactive synapses (will remove active ones below)
 		// Enforce synapses that were active
-		for( s = 0; s < segment.activeSynapsesHistory[0].length; s++ ) {
-			synapse = segment.activeSynapsesHistory[0][s];
-			synapse.permanence += params.permanenceIncrement;
-			if( synapse.permanence > 100 ) {
-				synapse.permanence = 100;
-			}
-			// Remove cell from random sampling if present (prevents duplicate connections)
-			for( i = 0; i < randomIndexes.length; i++ ) {
-				if( activeCells[randomIndexes[i]].index == synapse.cellTx.index ) {
-					// Cell is in the random sampling, remove it
-					randomIndexes.splice( i, 1 );
-			        break;
-			    }
-			}
-			// Remove synapse from the list of inactive synapses
-			for( i = 0; i < inactiveSynapses.length; i++ ) {
-				if( inactiveSynapses[i] === synapse ) {
-					// Found it
-					inactiveSynapses.splice( i, 1 );
-			        break;
-			    }
+		if( segment.activeSynapsesHistory.length > 0 ) {
+			for( s = 0; s < segment.activeSynapsesHistory[0].length; s++ ) {
+				synapse = segment.activeSynapsesHistory[0][s];
+				synapse.permanence += params.permanenceIncrement;
+				if( synapse.permanence > 100 ) {
+					synapse.permanence = 100;
+				}
+				// Remove cell from random sampling if present (prevents duplicate connections)
+				for( i = 0; i < randomIndexes.length; i++ ) {
+					if( activeCells[randomIndexes[i]].index == synapse.cellTx.index ) {
+						// Cell is in the random sampling, remove it
+						randomIndexes.splice( i, 1 );
+				        break;
+				    }
+				}
+				// Remove synapse from the list of inactive synapses
+				for( i = 0; i < inactiveSynapses.length; i++ ) {
+					if( inactiveSynapses[i] === synapse ) {
+						// Found it
+						inactiveSynapses.splice( i, 1 );
+				        break;
+				    }
+				}
 			}
 		}
 		// Degrade synapses that were not active
@@ -506,11 +597,16 @@ function HTMController() {
 	this.randomIndexes = function( length, resultCount, ordered ) {
 		var i1, i2;
 		var results = [];  // Array to hold the random indexes
+		var rc = resultCount;
+		// Make sure not to return more results than there are available
+		if( rc > length ) {
+			rc = length;
+		}
 		if( ordered ) {
 			// Start at a random index
 			i1 = Math.floor( Math.random() * length );
 			// Capture indexes in order from this point
-			for( i2 = 0; i2 < resultCount; i2++ ) {
+			for( i2 = 0; i2 < rc; i2++ ) {
 				results.push( i1 );
 				i1++;
 				if( i1 >= length ) {
@@ -525,7 +621,7 @@ function HTMController() {
 				indexes.push( i1 );
 			}
 			// Capture random indexes out of order
-			for( i2 = 0; i2 < resultCount; i2++ ) {
+			for( i2 = 0; i2 < rc; i2++ ) {
 				// Pick a random element from the unprocessed list
 				i1 = Math.floor( Math.random() * ( length - i2 ) );
 				// Capture the index in this element

@@ -409,9 +409,58 @@
 				// Temporal Memory (TM) phase
 				htmController.temporalMemory( 0, true );
 				
+				// Train cells in input layer to predict next input
+				htmController.inputLearn( 0 );
+				
 				// Update the canvases displaying input and layer cell states
 				drawInputCells();
 				drawLayerCells();
+				
+				// Predict which note will play next
+				predictNote();
+			}
+			
+			/*
+			* Use how well apical connections of input cells connect with current input to
+			* predict which note will play next.
+			*/
+			function predictNote() {
+				var i, k, cell;
+				var keys = ['c', 'd', 'e', 'f', 'g'];
+				var scores = { 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': 0 };
+				for( i = 0; i < htmController.input.predictiveCells.length; i++ ) {
+					cell = htmController.input.predictiveCells[i];
+					if( cell.apicalLearnSegment !== null ) {
+						for( k = 0; k < keys.length; k++ ) {
+							if( inArray( cell.index, notes[keys[k]] ) ) {
+								scores[keys[k]] += cell.apicalLearnSegment.activeSynapses.length;
+							}
+						}
+					}
+				}
+				i = 'c';
+				for( k = 0; k < keys.length; k++ ) {
+					if( scores[keys[k]] > scores[i] ) {
+						i = keys[k];
+					}
+				}
+				if( scores[i] > 0 ) {
+					$( "#prediction" ).html( i.toUpperCase() );
+				} else {
+					$( "#prediction" ).html( "(none)" );
+				}
+			}
+			
+			/*
+			* array.indexOf not present for all browsers, so using this instead
+			*/
+			function inArray( needle, haystack ) {
+				var length = haystack.length;
+				for( var i = 0; i < length; i++ ) {
+					if( haystack[i] == needle )
+					return true;
+				}
+				return false;
 			}
 			
 			/*

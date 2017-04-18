@@ -8,9 +8,9 @@
 function Segment( type, cellRx, column ) {
 
 	// TODO: Global constants
-	this.PROXIMAL   = ( ( typeof column === 'undefined' ) ? cellRx.PROXIMAL : column.PROXIMAL );
-	this.DISTAL     = ( ( typeof column === 'undefined' ) ? cellRx.DISTAL : column.DISTAL );
-	this.APICAL     = ( ( typeof column === 'undefined' ) ? cellRx.APICAL : column.APICAL );
+	this.PROXIMAL   = ( cellRx ? cellRx.PROXIMAL : column.PROXIMAL );
+	this.DISTAL     = ( cellRx ? cellRx.DISTAL : column.DISTAL );
+	this.APICAL     = ( cellRx ? cellRx.APICAL : column.APICAL );
 	
 	this.type = type; // proximal, distal, or apical
 	this.cellRx = cellRx;  // Receiving cell
