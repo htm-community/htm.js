@@ -6,11 +6,6 @@
  * 
  */
 function Segment( type, cellRx, column ) {
-
-	// TODO: Global constants
-	this.PROXIMAL   = ( cellRx ? cellRx.PROXIMAL : column.PROXIMAL );
-	this.DISTAL     = ( cellRx ? cellRx.DISTAL : column.DISTAL );
-	this.APICAL     = ( cellRx ? cellRx.APICAL : column.APICAL );
 	
 	this.type = type; // proximal, distal, or apical
 	this.cellRx = cellRx;  // Receiving cell
@@ -27,9 +22,9 @@ function Segment( type, cellRx, column ) {
 	this.learning = false;
 	
 	if( this.cellRx !== null ) {
-		if( this.type == this.DISTAL ) {
+		if( this.type == DISTAL ) {
 			this.cellRx.distalSegments.push( this );
-		} else if( this.type == this.APICAL ) {
+		} else if( this.type == APICAL ) {
 			this.cellRx.apicalSegments.push( this );
 		} else {
 			this.cellRx.proximalSegments.push( this );

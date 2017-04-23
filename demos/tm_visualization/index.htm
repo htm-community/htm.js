@@ -282,7 +282,7 @@
 		<script src="../../prototypes/synapse.prototype.js"></script>
 		<script src="../../prototypes/segment.prototype.js"></script>
 		<script src="../../prototypes/cell.prototype.js"></script>
-		<script src="../../prototypes/input.prototype.js"></script>
+		<script src="../../prototypes/cellmatrix.prototype.js"></script>
 		<script src="../../prototypes/column.prototype.js"></script>
 		<script src="../../prototypes/layer.prototype.js"></script>
 		<script src="../../htm.controller.js"></script>
@@ -331,7 +331,7 @@
 				
 				$( document ).on( "mouseenter", "td.cell", function() {
 					var i, w, tgtElem, segment;
-					var cell = htmController.layers[0].cells[$( this ).attr( "data-index" )];
+					var cell = htmController.layers[0].cellMatrix.cells[$( this ).attr( "data-index" )];
 					if( cell.active || cell.predictive ) {
 						$( ".line" ).remove();
 					}
@@ -414,17 +414,17 @@
 				var x;
 				
 				// Parse the properties
-				params = { 'skipSpatialPooling' : true };
+				params = { 'skipSpatialPooling' : true, 'inputCellCount' : 0 };
 				$( 'input[type="number"]' ).each( function() {
 					params[ $( this ).attr( 'id' ) ] = parseInt( $( this ).val() );
 				});
+				columns = { 'c':[], 'd':[], 'e':[], 'f':[], 'g':[] };
 				
 				// Create the layer
 				htmController.clear();
-				htmController.createLayer( params );
+				htmController.createTmLayer( params );
 				
 				// Manually create the columns for TM visualization
-				columns = { 'c':[], 'd':[], 'e':[], 'f':[], 'g':[] };
 				for( x = 0; x < keys.length; x++ ) {
 					createColumns( keys[x] );
 				}
@@ -511,14 +511,14 @@
 				$( ".cell" ).removeClass( "active" ).removeClass( "predictive" ).removeClass( "learning" );
 				
 				// Add current status classes
-				for( x = 0; x < layer.activeCells.length; x++ ) {
-					$( "#cell_" + layer.activeCells[x].index ).addClass( "active" );
+				for( x = 0; x < layer.cellMatrix.activeCells.length; x++ ) {
+					$( "#cell_" + layer.cellMatrix.activeCells[x].index ).addClass( "active" );
 				}
-				for( x = 0; x < layer.predictiveCells.length; x++ ) {
-					$( "#cell_" + layer.predictiveCells[x].index ).addClass( "predictive" );
+				for( x = 0; x < layer.cellMatrix.predictiveCells.length; x++ ) {
+					$( "#cell_" + layer.cellMatrix.predictiveCells[x].index ).addClass( "predictive" );
 				}
-				for( x = 0; x < layer.learningCells.length; x++ ) {
-					$( "#cell_" + layer.learningCells[x].index ).addClass( "learning" );
+				for( x = 0; x < layer.cellMatrix.learningCells.length; x++ ) {
+					$( "#cell_" + layer.cellMatrix.learningCells[x].index ).addClass( "learning" );
 				}
 			}
 			

@@ -5,47 +5,26 @@
  * same layer or from another layer). Cells also have apical dendrites
  * connecting them to cells in other layers or regions.
  * 
+ * Notes: proximalInput must be specified if spatial pooling is enabled.
+ * To skip SP, set param "skipSpatialPooling" = true, and then manually
+ * create columns with addColumn() (columns will then require manual
+ * activation prior to calling htmController.temporalMemory function).
+ * distalInput and apicalInput may be specified after the layer is
+ * instantiated (for example, when distal input comes from the layer's
+ * own cells, as required for temporal memory).
  */
-function Layer() {
-
-	// TODO: Global constants
-	this.PROXIMAL   = 0;
-	this.DISTAL     = 1;
-	this.APICAL     = 2;
-	
+function Layer( params, proximalInput, distalInput, apicalInput ) {
 	var my = this;
 	
-	this.cells = []; // All cells in the layer
-	this.columns = [];
-	
+	this.columns = [];  // Array of columns contained in this layer
 	this.activeColumns = [];   // Array of only the active columns
-	this.activeCells = [];     // Array of only the active cells
-	this.learningCells = [];   // Array of only the learning cells
-	this.predictiveCells = []; // Array of only the predictive cells
 
-	this.activeCellHistory = []; // Reverse-order history of active cells
-	this.learningCellHistory = []; // Reverse-order history of learning cells
-	this.predictiveCellHistory = []; // Reverse-order history of predictive cells
+	this.proximalInput = ( ( typeof proximalInput === 'undefined' ) ? null : proximalInput ); // Feed-forward input cells
+	this.distalInput = ( ( typeof distalInput === 'undefined' ) ? null : distalInput ); // distal input cells
+	this.apicalInput = ( ( typeof apicalInput === 'undefined' ) ? null : apicalInput ); // apical input cells
 	
-	this.defaultParams = {
-		'columnCount'               :  2048,
-		'cellsPerColumn'            :    32,
-		'activationThreshold'       :    13,
-		'initialPermanence'         :    21,  // %
-		'connectedPermanence'       :    50,  // %
-		'minThreshold'              :    10,
-		'maxNewSynapseCount'        :    32,
-		'permanenceIncrement'       :    10,  // %
-		'permanenceDecrement'       :    10,  // %
-		'predictedSegmentDecrement' :     1,  // %
-		'maxSegmentsPerCell'        :   128,
-		'maxSynapsesPerSegment'     :   128,
-		'potentialPercent'          :    50,  // %
-		'sparsity'                  :     2,  // %
-		'skipSpatialPooling'        : false,
-		'historyLength'             :     2
-	};
-	this.params = {};
+	this.params = params;
+	this.cellMatrix = new CellMatrix( this.params ); // A matrix containing all cells in the layer
 	
 	/**
 	 * This function adds a new column to the layer, and creates all of
@@ -53,13 +32,13 @@ function Layer() {
 	 * establishes randomly distributed proximal connections with the
 	 * input cells.
 	 */
-	this.addColumn = function( inputCells ) {
-		var y, z, i, p, perm, cell, synapse;
+	this.addColumn = function() {
+		var i, p, perm, synapse;
 		var column = new Column( my.columns.length, my.columns.length * my.params.cellsPerColumn, my.params.cellsPerColumn, my );
 		
-		// Randomly connect columns to input cells
-		if( !my.params.skipSpatialPooling ) {
-			for( i = 0; i < inputCells.length; i++ ) {
+		// Randomly connect columns to input cells, for use in spatial pooling
+		if( ( my.proximalInput !== null ) && !my.params.skipSpatialPooling ) {
+			for( i = 0; i < my.proximalInput.cells.length; i++ ) {
 				p = Math.floor( Math.random() * 100 );
 				if( p < my.params.potentialPercent ) {
 					perm = Math.floor( Math.random() * 100 );
@@ -67,7 +46,7 @@ function Layer() {
 						// Start with weak connections (for faster initial learning)
 						perm = my.params.connectedPermanence;
 					}
-					synapse = new Synapse( inputCells[i], column.proximalSegment, perm );
+					synapse = new Synapse( my.proximalInput.cells[i], column.proximalSegment, perm );
 				}
 			}
 		}
@@ -76,56 +55,26 @@ function Layer() {
 		return column;
 	}
 	
-	/**
-	 * This function resets all parameters to default and clears all
-	 * arrays
-	 */
-	this.clear = function() {
-		var property;
-		
-		// Reset parameters to defaults
-		for( property in my.defaultParams ) {
-			if( my.defaultParams.hasOwnProperty( property ) ) {
-				my.params[property] = my.defaultParams[property];
-			}
+	// Add the columns if spatial pooling is enabled
+	if( !this.params.skipSpatialPooling ) {
+		for( var c = 0; c < this.params.columnCount; c++ ) {
+			this.addColumn();
 		}
-		// Clear all arrays;
-		my.cells = [];
-		my.columns = [];
-		
-		my.activeColumns = [];
-		my.activeCells = [];
-		my.learningCells = [];
-		my.predictiveCells = [];
 	}
 	
 	/**
-	 * This function must be called first.  If params are not specified,
-	 * defaults will be used.
-	 * 
-	 * Note: To skip SP, set param "skipSpatialPooling" = true, and then
-	 * manually create columns with addColumn() after calling initialize()
-	 * (columns will then require manual activation).
-	 * 
+	 * This function clears all references
 	 */
-	this.initialize = function( params, inputCells ) {
-		var c, property;
-		
-		my.clear();
-		
-		// Override default params with any provided
-		if( ( typeof params !== 'undefined' ) && ( params !== null ) ) {
-			for( property in params ) {
-				if( params.hasOwnProperty( property ) ) {
-					my.params[property] = params[property];
-				}
-			}
-		}
-		
-		if( !my.params.skipSpatialPooling ) {
-			for( c = 0; c < my.params.columnCount; c++ ) {
-				my.addColumn( inputCells );
-			}
+	this.clear = function() {
+		if( my !== null ) {
+			my.cellMatrix = null;
+			my.columns = null;
+			my.activeColumns = null;
+			my.proximalInput = null;
+			my.distalInput = null;
+			my.apicalInput = null;
+			my.params = null;
+			my = null;
 		}
 	}
 	

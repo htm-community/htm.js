@@ -1,51 +1,89 @@
 /**
+ * Global constants
+ * ("const" not supported by IE, so using "var")
+ */
+var PROXIMAL   = 0;
+var DISTAL     = 1;
+var APICAL     = 2;
+
+/**
  * The HTMController contains high-level HTM functions.
  * 
  */
 function HTMController() {
-	var my = this;
+	var my = this; // Reference to self, for use in functions
 	
-	this.input = new Input();
-	this.layers = [];
+	this.layers = []; // Each layer created is stored here for easy lookup
 	
 	this.timestep = 0; // Used for tracking least recently used resources
 	
+	// Defaults to use for any param not specified:
+	this.defaultParams = {
+		'columnCount'               :  2048,
+		'cellsPerColumn'            :    32,
+		'activationThreshold'       :    13,
+		'initialPermanence'         :    21,  // %
+		'connectedPermanence'       :    50,  // %
+		'minThreshold'              :    10,
+		'maxNewSynapseCount'        :    32,
+		'permanenceIncrement'       :    10,  // %
+		'permanenceDecrement'       :    10,  // %
+		'predictedSegmentDecrement' :     1,  // %
+		'maxSegmentsPerCell'        :   128,
+		'maxSynapsesPerSegment'     :   128,
+		'potentialPercent'          :    50,  // %
+		'sparsity'                  :     2,  // %
+		'inputCellCount'            :  1024,
+		'skipSpatialPooling'        : false,
+		'historyLength'             :     2
+	};
+	
 	/**
-	 * This function clears all layers and the collection of input cells
+	 * This function creates a cell matrix containing the number of
+	 * input cells specifed in the params, and returns it.
 	 */
-	this.clear = function() {
-		var i;
-		my.input.clear();
-		for( i = 0; i < my.layers.length; i++ ) {
-			my.layers[i].clear();
+	this.createInputCells = function( params ) {
+		var i, cell;
+		// Create a matrix to hold the new cells
+		var inputCells = new CellMatrix( params );
+		// Generate the specified number of input cells
+		for( i = 0; i < params.inputCellCount; i++ ) {
+			cell = new Cell( inputCells, i );
 		}
-		my.layers = [];
-		return my;
+		// Return the cell matrix
+		return inputCells;
 	}
 	
 	/**
-	 * This function creates a collection of input cells
+	 * This function generates a new temporal memory layer.  If spatial
+	 * pooling is enabled, a matrix of input cells is also created,
+	 * containing the number specified in the params.
+	 * 
+	 * (a TM layer is one which receives distal input from its own cells)
 	 */
-	this.createInputCells = function( length ) {
-		var i;
-		var inputCells = [];
-		for( i = 0; i < length; i++ ) {
-			inputCells.push( new Cell( i ) );
+	this.createTmLayer = function( params ) {
+		// Override default params with any provided
+		var layerParams = my.defaultParams;
+		if( ( typeof params !== 'undefined' ) && ( params !== null ) ) {
+			for( var property in params ) {
+				if( params.hasOwnProperty( property ) ) {
+					layerParams[property] = params[property];
+				}
+			}
 		}
-		my.input.clear();
-		my.input.cells = inputCells;
-		return my;
-	}
-	
-	/**
-	 * This function generates a new layer and adds it to the array.
-	 * Should only be called after creating the input array.
-	 */
-	this.createLayer = function( params ) {
-		var layer = new Layer();
-		layer.initialize( params, my.input.cells );
-		my.layers.push( layer );
-		return my;
+		
+		// If spatial pooling is enabled, create a matrix of input cells
+		var inputCells = null; 
+		if( !layerParams.skipSpatialPooling ) {
+			inputCells = my.createInputCells( layerParams );
+		}
+		// Create the layer
+		var layer = new Layer( layerParams, inputCells );
+		// Set the layer's distal input to its own cell matrix
+		layer.distalInput = layer.cellMatrix;
+		my.layers.push( layer ); // Save for easy lookup
+		
+		return my; // Allows chaining function calls
 	}
 	
 	/**
@@ -57,54 +95,29 @@ function HTMController() {
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
 		
-		// Determine the best columns to become active for this input
-		
-		// Save previously active input cells
-		my.input.activeCellHistory.unshift( my.input.activeCells );
-		if( my.input.activeCellHistory.length > layer.params.historyLength ) {
-			my.input.activeCellHistory.length = layer.params.historyLength;
-		}
-		my.input.predictiveCellHistory.unshift( my.input.predictiveCells );
-		if( my.input.predictiveCellHistory.length > layer.params.historyLength ) {
-			my.input.predictiveCellHistory.length = layer.params.historyLength;
-		}
-		my.input.learningCellHistory.unshift( my.input.learningCells );
-		if( my.input.learningCellHistory.length > layer.params.historyLength ) {
-			my.input.learningCellHistory.length = layer.params.historyLength;
-		}
-		
 		// Clear input cell states
-		my.input.activeCells = [];
-		my.input.predictiveCells = [];
-		my.input.learningCells = [];
-		for( i = 0; i < my.input.cells.length; i++ ) {
-			cell = my.input.cells[i];
-			cell.active = false;
-			cell.predictive = false;
-			cell.learning = false;
-		}
+		layer.proximalInput.resetActiveStates();
+		layer.proximalInput.resetPredictiveStates();
 		
 		// Reset the column scores
 		for( i = 0; i < layer.columns.length; i++ ) {
 			layer.columns[i].score = 0;
 		}
-		// Increase score of each column that is connected to an active input cell
-		for( c = 0; c < activeInputSDR.length; c++ ) {
-			i = activeInputSDR[c];
-			cell = my.input.cells[i];
+		
+		// Update active state of input cells which match the specified SDR.
+		// If learning is enabled, also set their learn state.
+		for( i = 0; i < activeInputSDR.length; i++ ) {
+			cell = layer.proximalInput.cells[activeInputSDR[i]];
 			cell.active = true;
-			my.input.activeCells.push( cell );
-			if( learn ) {
+			layer.proximalInput.activeCells.push( cell );
+			if( learn ) { // Learning enabled, set learn states
 				cell.learning = true;
-				my.input.learningCells.push( cell );
-			}
-			for( i = 0; i < cell.axonSynapses.length; i++ ) {
-				synapse = cell.axonSynapses[i];
-				if( synapse.permanence >= layer.params.connectedPermanence ) {
-					synapse.segment.column.score++;
-				}
+				layer.proximalInput.learningCells.push( cell );
 			}
 		}
+		// Activate input cells (also calculates the column scores)
+		my.activateCellMatrix( layer.proximalInput, my.timestep + 1 ); // Timestep incremented in TM phase
+		
 		// Select the columns with the highest scores to become active
 		var bestColumns = [];
 		var activeColumnCount = parseInt( ( parseFloat( layer.params.sparsity ) / 100 ) * layer.params.columnCount );
@@ -146,7 +159,7 @@ function HTMController() {
 		}
 		
 		layer.activeColumns = bestColumns;
-		return my;
+		return my; // Allows chaining function calls
 	}
 	
 	/**
@@ -169,63 +182,32 @@ function HTMController() {
 		if( learn ) {
 			my.tmLearn( layer );
 		}
+		return my; // Allows chaining function calls
+	}
+	
+	/**
+	 * This function allows the input cells to grow apical connections with the active cells in
+	 * the specified layer, allowing next inputs to be predicted.  This is designed to replace
+	 * the heavier-weight classifier logic for making predictions one timestep in the future.
+	 */
+	this.inputMemory = function( layerIdx ) {
+		var layer = my.layers[layerIdx];
+		
+		my.trainCellMatrix( layer.cellMatrix, layer.proximalInput, APICAL );
 	}
 	
 	/**
 	 * Activates cells in each active column, and selects cells to learn in the next
-	 * timestep.
+	 * timestep.  Activity is queued up, but not transmitted to receiving cells until
+	 * tmPredict() is executed.
 	 * 
 	 * This is Phase 1 of the temporal memory process.
 	 */
 	this.tmActivate = function( layer, learn ) {
 		var i, c, x, predicted, column, cell, learningCell, synapse;
 		
-		// Save previous active cell history
-		layer.activeCellHistory.unshift( layer.activeCells );
-		if( layer.activeCellHistory.length > layer.params.historyLength ) {
-			layer.activeCellHistory.length = layer.params.historyLength;
-		}
-		// Deactivate all cells
-		for( i = 0; i < layer.activeCells.length; i++ ) {
-			cell = layer.activeCells[i];
-			cell.active = false;
-			cell.distalLearnSegment = null; // Reset previous distal learn segment
-			cell.apicalLearnSegment = null; // Reset previous apical learn segment
-			// Clear previous references to segment activity
-			for( c = 0; c < cell.axonSynapses.length; c++ ) {
-				synapse = cell.axonSynapses[c];
-				// Make sure we haven't already processed this segment's active synapses list
-				if( synapse.segment.activeSynapses.length > 0 ) {
-					// Save active synapses history, then clear in preparation for new input
-					synapse.segment.activeSynapsesHistory.unshift( cell.axonSynapses[c].segment.activeSynapses );
-					if( synapse.segment.activeSynapsesHistory.length > layer.params.historyLength ) {
-						synapse.segment.activeSynapsesHistory.length = layer.params.historyLength;
-					}
-					synapse.segment.activeSynapses = [];
-				}
-				// Make sure we haven't already processed this segment's connected synapses list
-				if( synapse.segment.connectedSynapses.length > 0 ) {
-					// Save connected synapses history, then clear in preparation for new input
-					synapse.segment.connectedSynapsesHistory.unshift( synapse.segment.connectedSynapses );
-					if( synapse.segment.connectedSynapsesHistory.length > layer.params.historyLength ) {
-						synapse.segment.connectedSynapsesHistory.length = layer.params.historyLength;
-					}
-					synapse.segment.connectedSynapses = [];
-				}
-			}
-		}
-		layer.activeCells = [];
-		// Save previous learning cell history
-		layer.learningCellHistory.unshift( layer.learningCells );
-		if( layer.learningCellHistory.length > layer.params.historyLength ) {
-			layer.learningCellHistory.length = layer.params.historyLength;
-		}
-		// Clear all learning flags
-		for( i = 0; i < layer.learningCells.length; i++ ) {
-			cell = layer.learningCells[i];
-			cell.learning = false;
-		}
-		layer.learningCells = [];
+		// Reset this layer's active cell states after saving history.
+		layer.cellMatrix.resetActiveStates();
 		
 		// Loop through each active column and activate cells
 		for( i = 0; i < layer.activeColumns.length; i++ ) {
@@ -235,10 +217,10 @@ function HTMController() {
 				cell = column.cells[c];
 				if( cell.predictive ) {
 					cell.active = true; // Activate predictive cell
-					layer.activeCells.push( cell );
+					layer.cellMatrix.activeCells.push( cell );
 					if( learn ) {
 						cell.learning = true;  // Flag cell for learning
-						layer.learningCells.push( cell );
+						layer.cellMatrix.learningCells.push( cell );
 					}
 					predicted = true;  // Input was predicted
 				}
@@ -248,7 +230,7 @@ function HTMController() {
 				for( c = 0; c < column.cells.length; c++ ) {
 					cell = column.cells[c];
 					cell.active = true;
-					layer.activeCells.push( cell );
+					layer.cellMatrix.activeCells.push( cell );
 				}
 				if( learn ) {
 					// Select a cell for learning
@@ -268,11 +250,11 @@ function HTMController() {
 							}
 						}
 						learningCell.learning = true;  // Flag chosen cell to learn
-						layer.learningCells.push( learningCell );
+						layer.cellMatrix.learningCells.push( learningCell );
 					} else {
 						// Flag cell with best matching segment to learn
 						column.bestDistalSegment.cellRx.learning = true;
-						layer.learningCells.push( column.bestDistalSegment.cellRx );
+						layer.cellMatrix.learningCells.push( column.bestDistalSegment.cellRx );
 					}
 				}
 			}
@@ -280,94 +262,125 @@ function HTMController() {
 	}
 	
 	/**
-	 * Drives cells into predictive state base on distal or apical connections with
-	 * active cells.  Also identifies the distal and apical segments which best
-	 * match the current activity.
+	 * Transmits queued activity, driving cells into predictive state based on
+	 * distal or apical connections with active cells.  Also identifies the
+	 * distal and apical segments that best match the current activity, which
+	 * is later used when tmLearn() is executed.
 	 * 
 	 * This is Phase 2 of the temporal memory process.
 	 */
 	this.tmPredict = function( layer ) {
 		var i, c, column, cell, synapse;
 		
-		// Save previous predictive cell history
-		layer.predictiveCellHistory.unshift( layer.predictiveCells );
-		if( layer.predictiveCellHistory.length > layer.params.historyLength ) {
-			layer.predictiveCellHistory.length = layer.params.historyLength;
-		}
-		// Clear all predictive states
-		for( i = 0; i < layer.predictiveCells.length; i++ ) {
-			cell = layer.predictiveCells[i];
-			cell.predictive = false;
-			cell.distalLearnSegment = null;  // Reset previous distal learn segment
-			cell.apicalLearnSegment = null;  // Reset previous apical learn segment
-		}
-		layer.predictiveCells = [];
-		// Save best matching distal and apical segments history, and clear references to them
+		// Reset this layer's predictive cell states after saving history.
+		layer.cellMatrix.resetPredictiveStates();
+		
+		// Save column best matching segments history, and clear references
 		for( i = 0; i < layer.columns.length; i++ ) {
+			// Save best matching distal segment history
 			column = layer.columns[i];
 			column.bestDistalSegmentHistory.unshift( column.bestDistalSegment );
 			if( column.bestDistalSegmentHistory.length > layer.params.historyLength ) {
 				column.bestDistalSegmentHistory.length = layer.params.historyLength;
 			}
+			// Clear reference to best matching distal segment
 			column.bestDistalSegment = null;
+			// Save best matching apical segment history
 			column.bestApicalSegmentHistory.unshift( column.bestApicalSegment );
 			if( column.bestApicalSegmentHistory.length > layer.params.historyLength ) {
 				column.bestApicalSegmentHistory.length = layer.params.historyLength;
 			}
+			// Clear reference to best matching apical segment
 			column.bestApicalSegment = null;
 		}
 		
-		// Transmit along axons of active cells.  This step may cause other cells to activate or become predictive.
-		for( i = 0; i < layer.activeCells.length; i++ ) {
-			cell = layer.activeCells[i];
-			for( c = 0; c < cell.axonSynapses.length; c++ ) {
-				synapse = cell.axonSynapses[c];
-				synapse.segment.lastUsedTimestep = my.timestep; // Update segment's last used timestep
-				// Add to segment's active synapses list
-				synapse.segment.activeSynapses.push( synapse );
-				if( synapse.permanence >= layer.params.connectedPermanence ) {
-					synapse.segment.connectedSynapses.push( synapse );
-					if( synapse.segment.connectedSynapses.length >= layer.params.activationThreshold ) {
-						// Put cell into predictive state
-						if( !synapse.segment.cellRx.predictive ) {
-							synapse.segment.cellRx.predictive = true;
-							if( synapse.segment.type == layer.DISTAL ) {
-								synapse.segment.cellRx.distalLearnSegment = synapse.segment;
-							} else if( synapse.segment.type == layer.APICAL ) {
-								synapse.segment.cellRx.apicalLearnSegment = synapse.segment;
-							}
-							if( ( typeof synapse.segment.cellRx.column !== 'undefined' ) && ( synapse.segment.cellRx.column !== null ) ) {
-								synapse.segment.cellRx.column.layer.predictiveCells.push( synapse.segment.cellRx );
+		// Transmit queued activity to receiving synapses to generate predictions
+		my.activateCellMatrix( layer.cellMatrix, my.timestep );
+	}
+	
+	/**
+	 * This function allows cells in a layer to grow distal connections with other cells
+	 * in the same layer, allowing next state to be predicted. Enforces good predictions
+	 * and degrades wrong predictions.
+	 * 
+	 * This is Phase 3 of the temporal memory process.
+	 */
+	this.tmLearn = function( layer ) {
+		
+		my.trainCellMatrix( layer.distalInput, layer.cellMatrix, DISTAL );
+	}
+	
+	/**
+	 * Activates the cells in a matrix which have had their "active" flag set.
+	 * If cells are feeding a spatial pooler, increases the scores of the columns
+	 * they are connected to.  Otherwise, transmits to dendrites of other receiving
+	 * cells, and may place them into predictive or active states.
+	 */
+	this.activateCellMatrix = function( cellMatrix, timestep ) {
+		var c, s, column, cell, synapse;
+		
+		for( c = 0; c < cellMatrix.activeCells.length; c++ ) {
+			cell = cellMatrix.activeCells[c];
+			// Activate synapses along the cell's axon
+			for( s = 0; s < cell.axonSynapses.length; s++ ) {
+				synapse = cell.axonSynapses[s];
+				synapse.segment.lastUsedTimestep = timestep; // Update segment's last used timestep
+				if( synapse.segment.cellRx === null ) {
+					// This is the proximal segment of a column.  Just update the column score.
+					if( synapse.permanence >= cellMatrix.params.connectedPermanence ) {
+						synapse.segment.column.score++;
+					}
+				} else {
+					// This is the segment of a cell.  Determine if state should be updated.
+					// First, add to segment's active synapses list
+					synapse.segment.activeSynapses.push( synapse );
+					if( synapse.permanence >= cellMatrix.params.connectedPermanence ) {
+						// Synapse connected, add to connected synapses list
+						synapse.segment.connectedSynapses.push( synapse );
+						if( synapse.segment.connectedSynapses.length >= cellMatrix.params.activationThreshold ) {
+							// Number of connected synapses above threshold. Update receiving cell.
+							if( !synapse.segment.cellRx.predictive ) {
+								// Mark receiving cell as predictive (TODO: consider proximal segments)
+								synapse.segment.cellRx.predictive = true;
+								// Update the receiving cell's matrix
+								synapse.segment.cellRx.matrix.predictiveCells.push( synapse.segment.cellRx );
+								// Add segment to appropriate list for learning
+								if( synapse.segment.type == DISTAL ) {
+									synapse.segment.cellRx.distalLearnSegment = synapse.segment;
+								} else if( synapse.segment.type == APICAL ) {
+									// TODO: Consider cases where distal + apical should activate cell.
+									synapse.segment.cellRx.apicalLearnSegment = synapse.segment;
+								}
 							}
 						}
 					}
-				}
-				// If cell is in a column, update best matching segment references
-				if( ( typeof synapse.segment.cellRx.column !== 'undefined' ) && ( synapse.segment.cellRx.column !== null ) ) {
-					column = synapse.segment.cellRx.column;
-					// Save a reference to the best matching distal and apical segments in the column
-					if( synapse.segment.type === layer.DISTAL ) {
-						if( ( column.bestDistalSegment === null )
-							|| ( synapse.segment.connectedSynapses.length > column.bestDistalSegment.connectedSynapses.length )
-							|| ( synapse.segment.activeSynapses.length > column.bestDistalSegment.activeSynapses.length ) )
-						{
-							// Make sure segment has at least minimum number of potential synapses
-							if( synapse.segment.activeSynapses.length >= layer.params.minThreshold ) {
-								// This segment is a better match, use it
-								column.bestDistalSegment = synapse.segment;
-								synapse.segment.cellRx.distalLearnSegment = synapse.segment;
+					// If receiving cell is in a column, update best matching segment references
+					if( synapse.segment.cellRx.column !== null ) {
+						column = synapse.segment.cellRx.column;
+						// Save a reference to the best matching distal and apical segments in the column
+						if( synapse.segment.type === DISTAL ) {
+							if( ( column.bestDistalSegment === null )
+								|| ( synapse.segment.connectedSynapses.length > column.bestDistalSegment.connectedSynapses.length )
+								|| ( synapse.segment.activeSynapses.length > column.bestDistalSegment.activeSynapses.length ) )
+							{
+								// Make sure segment has at least minimum number of potential synapses
+								if( synapse.segment.activeSynapses.length >= cellMatrix.params.minThreshold ) {
+									// This segment is a better match, use it
+									column.bestDistalSegment = synapse.segment;
+									synapse.segment.cellRx.distalLearnSegment = synapse.segment;
+								}
 							}
-						}
-					} else if( synapse.segment.type === layer.APICAL ) {
-						if( ( column.bestApicalSegment === null )
-							|| ( synapse.segment.connectedSynapses.length > column.bestApicalSegment.connectedSynapses.length )
-							|| ( synapse.segment.activeSynapses.length > column.bestApicalSegment.activeSynapses.length ) )
-						{
-							// Make sure segment has at least minimum number of potential synapses
-							if( synapse.segment.activeSynapses.length >= layer.params.minThreshold ) {
-								// This segment is a better match, use it
-								column.bestApicalSegment = synapse.segment;
-								synapse.segment.cellRx.apicalLearnSegment = synapse.segment;
+						} else if( synapse.segment.type === APICAL ) {
+							if( ( column.bestApicalSegment === null )
+								|| ( synapse.segment.connectedSynapses.length > column.bestApicalSegment.connectedSynapses.length )
+								|| ( synapse.segment.activeSynapses.length > column.bestApicalSegment.activeSynapses.length ) )
+							{
+								// Make sure segment has at least minimum number of potential synapses
+								if( synapse.segment.activeSynapses.length >= cellMatrix.params.minThreshold ) {
+									// This segment is a better match, use it
+									column.bestApicalSegment = synapse.segment;
+									synapse.segment.cellRx.apicalLearnSegment = synapse.segment;
+								}
 							}
 						}
 					}
@@ -377,34 +390,54 @@ function HTMController() {
 	}
 	
 	/**
-	 * Creates or adapts distal segments to align with previously active cells.
-	 * Enforces good predictions and degrades wrong predictions.
-	 * 
-	 * This is Phase 3 of the temporal memory process.
+	 * Creates or adapts distal and apical segments in a receiving cell matrix to
+	 * align with previously active cells in a transmitting cell matrix. Enforces
+	 * good predictions and degrades wrong predictions.
 	 */
-	this.tmLearn = function( layer ) {
-		var i, c, randomIndexes, cell, segment, synapse;
+	this.trainCellMatrix = function( cellMatrixTx, cellMatrixRx, inputType ) {
+		var c, s, randomIndexes, cell, segment, synapse;
 		
-		if( layer.activeCellHistory.length > 0 ) {
+		if( ( cellMatrixTx.activeCellHistory.length > 0 ) && ( cellMatrixRx.predictiveCellHistory.length > 0 ) ) {
 			// Enforce correct predictions, degrade wrong predictions
-			for( i = 0; i < layer.predictiveCellHistory[0].length; i++ ) {
-				cell = layer.predictiveCellHistory[0][i];
-				
-				if( typeof cell.column !== 'undefined'
-					&& cell.column.bestDistalSegmentHistory[0] !== null
-					&& cell.column.bestDistalSegmentHistory[0].cellRx === cell
-					&& cell.column.bestDistalSegmentHistory[0].activeSynapsesHistory.length > 0
-					&& cell.column.bestDistalSegmentHistory[0].activeSynapsesHistory[0].length > 0 )
+			for( c = 0; c < cellMatrixRx.predictiveCellHistory[0].length; c++ ) {
+				segment = null;
+				cell = cellMatrixRx.predictiveCellHistory[0][c];
+				if( cell.column !== null ) {
+					// Cell is part of a layer's cell matrix.
+					// Make sure this cell is the one referenced by column's best segment history
+					if( inputType == DISTAL
+						&& cell.column.bestDistalSegmentHistory.length > 0
+						&& cell.column.bestDistalSegmentHistory[0] !== null
+						&& cell.column.bestDistalSegmentHistory[0].cellRx === cell )
+					{
+						segment = cell.column.bestDistalSegmentHistory[0];
+					} else if( inputType == APICAL
+						&& cell.column.bestApicalSegmentHistory.length > 0
+						&& cell.column.bestApicalSegmentHistory[0] !== null
+						&& cell.column.bestApicalSegmentHistory[0].cellRx === cell )
+					{
+						segment = cell.column.bestApicalSegmentHistory[0];
+					}
+				} else {
+					// Cell is part of an input cell matrix.
+					if( inputType == DISTAL ) {
+						segment = cell.distalLearnSegment;
+					} else if( inputType == APICAL ) {
+						segment = cell.apicalLearnSegment;
+					}
+				}
+				if( segment !== null
+					&& segment.activeSynapsesHistory.length > 0
+					&& segment.activeSynapsesHistory[0].length > 0 )
 				{
 					if( cell.active ) {
 						// Correct prediction.  Train it to better align with activity.
-						my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer.activeCellHistory[0], layer.params );
+						my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params );
 					} else {
 						// Wrong prediction.  Degrade connections on this segment.
-						segment = cell.column.bestDistalSegmentHistory[0];
-						for( c = 0; c < segment.synapses.length; c++ ) {
-							synapse = segment.synapses[c];
-							synapse.permanence -= layer.params.predictedSegmentDecrement;
+						for( s = 0; s < segment.synapses.length; s++ ) {
+							synapse = segment.synapses[s];
+							synapse.permanence -= cellMatrixRx.params.predictedSegmentDecrement;
 							if( synapse.permanence < 0 ) {
 								synapse.permanence = 0;
 							}
@@ -414,97 +447,57 @@ function HTMController() {
 				cell.learning = false;  // Remove learning flag, so cell doesn't get double-trained
 			}
 			// If this isn't first input (or reset), train cells which were not predicted
-			if( layer.learningCellHistory[0].length > 0 ) {
+			if( cellMatrixRx.learningCellHistory[0].length > 0 ) {
 				// Loop through cells which have been flagged for learning
-				for( i = 0; i < layer.learningCells.length; i++ ) {
-					cell = layer.learningCells[i];
+				for( c = 0; c < cellMatrixRx.learningCells.length; c++ ) {
+					segment = null;
+					cell = cellMatrixRx.learningCells[c];
+					
 					// Make sure we haven't already trained this cell
 					if( cell.learning ) {
-						// We haven't trained this cell yet.  Check for a matching distal segment
-						if( typeof cell.column !== 'undefined'
-							&& cell.column.bestDistalSegmentHistory[0] !== null
-							&& cell.column.bestDistalSegmentHistory[0].cellRx === cell
-							&& cell.column.bestDistalSegmentHistory[0].activeSynapsesHistory.length > 0
-							&& cell.column.bestDistalSegmentHistory[0].activeSynapsesHistory[0].length > 0 )
-						{
-							// Found a matching distal segment.  Train it to better align with activity.
-							my.trainSegment( cell.column.bestDistalSegmentHistory[0], layer.activeCellHistory[0], layer.params );
+						if( cell.column !== null ) {
+							// Cell is part of a layer's cell matrix
+							if( inputType == DISTAL
+								&& cell.column.bestDistalSegmentHistory.length > 0
+								&& cell.column.bestDistalSegmentHistory[0] !== null
+								&& cell.column.bestDistalSegmentHistory[0].cellRx === cell )
+							{
+								segment = cell.column.bestDistalSegmentHistory[0];
+							}else if( inputType == APICAL
+								&& cell.column.bestApicalSegmentHistory.length > 0
+								&& cell.column.bestApicalSegmentHistory[0] !== null
+								&& cell.column.bestApicalSegmentHistory[0].cellRx === cell )
+							{
+								segment = cell.column.bestApicalSegmentHistory[0];
+							}
 						} else {
-							// No matching distal segment.  Create a new one.
-							segment = new Segment( layer.DISTAL, cell, cell.column );
+							// Cell is part of an input cell matrix
+							if( inputType == DISTAL ) {
+								segment = cell.distalLearnSegment;
+							} else if( inputType == APICAL ) {
+								segment = cell.apicalLearnSegment;
+							}
+						}
+						// We haven't trained this cell yet.  Check if it had a matching segment
+						if( segment !== null
+							&& segment.activeSynapsesHistory.length > 0
+							&& segment.activeSynapsesHistory[0].length > 0 )
+						{
+							// Found a matching segment.  Train it to better align with activity.
+							my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params );
+						} else {
+							// No matching segment.  Create a new one.
+							segment = new Segment( inputType, cell, cell.column );
 							segment.lastUsedTimestep = my.timestep;
-							// Connect segment with random sampling of previously active cells, up to max new synapse count
-							randomIndexes = my.randomIndexes( layer.learningCellHistory[0].length, layer.params.maxNewSynapseCount, false );
-							for( c = 0; c < randomIndexes.length; c++ ) {
-								synapse = new Synapse( layer.learningCellHistory[0][randomIndexes[c]], segment, layer.params.initialPermanence );
+							// Connect segment with random sampling of previously active learning cells, up to max new synapse count
+							randomIndexes = my.randomIndexes( cellMatrixTx.learningCellHistory[0].length, cellMatrixRx.params.maxNewSynapseCount, false );
+							for( s = 0; s < randomIndexes.length; s++ ) {
+								synapse = new Synapse( cellMatrixTx.learningCellHistory[0][randomIndexes[s]], segment, cellMatrixRx.params.initialPermanence );
 							}
 						}
 						cell.learning = false;
 					}
 				}
-			}
-		}
-	}
-	
-	/**
-	 * This function allows the input cells to grow apical connections with the active cells in
-	 * the specified layer, allowing next inputs to be predicted.  This is designed to replace
-	 * the heavier-weight classifier logic for making predictions one timestep in the future.
-	 */
-	this.inputLearn = function( layerIdx ) {
-		var cell;
-		var layer = my.layers[layerIdx];
-		
-		// Enforce correct predictions, degrade wrong predictions
-		if( layer.activeCellHistory.length > 0 ) {
-			for( i = 0; i < my.input.predictiveCellHistory[0].length; i++ ) {
-				cell = my.input.predictiveCellHistory[0][i];
-				if( cell.active ) {
-					// Correct prediction.  Train it to better align with activity.
-					my.trainSegment( cell.apicalLearnSegment, layer.activeCellHistory[0], layer.params );
-				} else {
-					// Wrong prediction.  Degrade connections on this segment.
-					for( c = 0; c < cell.apicalLearnSegment.synapses.length; c++ ) {
-						synapse = cell.apicalLearnSegment.synapses[c];
-						synapse.permanence -= layer.params.predictedSegmentDecrement;
-						if( synapse.permanence < 0 ) {
-							synapse.permanence = 0;
-						}
-					}
-				}
-				cell.learning = false;  // Remove learning flag, so cell doesn't get double-trained
-			}
-		}
-		// Loop through remaining cells which have been flagged for learning
-		if( layer.learningCellHistory.length > 0 ) {
-			for( i = 0; i < my.input.learningCells.length; i++ ) {
-				cell = my.input.learningCells[i];
-				// Make sure we haven't already trained this cell
-				if( cell.learning ) {
-					// We haven't trained this cell yet.  Check if it has a matching apical segment
-					if( cell.apicalLearnSegment !== null ) {
-						// Found a matching apical segment.  Train it to better align with activity.
-						my.trainSegment( cell.apicalLearnSegment, layer.activeCellHistory[0], layer.params );
-					} else {
-						// No matching apical segment.  Create a new one.
-						segment = new Segment( layer.APICAL, cell );
-						cell.apicalLearnSegment = segment;
-						segment.lastUsedTimestep = my.timestep;
-						// Connect segment with random sampling of previously active cells, up to max new synapse count
-						randomIndexes = my.randomIndexes( layer.learningCellHistory[0].length, layer.params.maxNewSynapseCount, false );
-						for( c = 0; c < randomIndexes.length; c++ ) {
-							synapse = new Synapse( layer.learningCellHistory[0][randomIndexes[c]], segment, layer.params.initialPermanence );
-						}
-					}
-					cell.learning = false;
-				}
-			}
-		}
-		// Remember input cells that are in predictive state
-		for( i = 0; i < my.input.cells.length; i++ ) {
-			cell = my.input.cells[i];
-			if( cell.predictive ) {
-				my.input.predictiveCells.push( cell );
 			}
 		}
 	}
@@ -553,9 +546,9 @@ function HTMController() {
 			}
 		}
 		// Select the relevant list of segments, based on type
-		if( segment.type == segment.DISTAL ) {
+		if( segment.type == DISTAL ) {
 			segments = segment.cellRx.distalSegments;
-		} else if( segment.type == segment.APICAL ) {
+		} else if( segment.type == APICAL ) {
 			segments = segment.cellRx.apicalSegments;
 		} else {
 			segments = segment.cellRx.proximalSegments;
@@ -631,6 +624,19 @@ function HTMController() {
 			}
 		}
 		return results;
+	}
+	
+	/**
+	 * This function clears all layers
+	 */
+	this.clear = function() {
+		// Loop through all saved layers
+		var i;
+		for( i = 0; i < my.layers.length; i++ ) {
+			my.layers[i].clear(); // Clears all references
+		}
+		my.layers = []; // Empty the layers array
+		return my; // Allows chaining function calls
 	}
 	
 }

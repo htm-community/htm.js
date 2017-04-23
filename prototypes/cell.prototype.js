@@ -7,13 +7,9 @@
  * selected for learning.
  * 
  */
-function Cell( index, x, y, column ) {
+function Cell( matrix, index, x, y, column ) {
 	
-	// TODO: Global constants
-	this.PROXIMAL   = ( ( typeof column === 'undefined' ) ? 0 : column.PROXIMAL );
-	this.DISTAL     = ( ( typeof column === 'undefined' ) ? 1 : column.DISTAL );
-	this.APICAL     = ( ( typeof column === 'undefined' ) ? 2 : column.APICAL );
-	
+	this.matrix = matrix; // Reference to matrix containing the cell
 	this.index = index;  // 1 dimentional index of the cell
 	this.x = ( ( typeof x === 'undefined' ) ? index : x );  // 2 dimentional x index of the cell
 	this.y = ( ( typeof y === 'undefined' ) ? 0 : y );  // 2 dimentional y index of the cell
@@ -31,5 +27,6 @@ function Cell( index, x, y, column ) {
 	this.predictive = false;
 	this.learning = false;
 	
-
+	// Add this cell to its matrix
+	this.matrix.cells.push( this );
 }

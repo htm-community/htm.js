@@ -239,7 +239,7 @@
 		<script src="../../prototypes/synapse.prototype.js"></script>
 		<script src="../../prototypes/segment.prototype.js"></script>
 		<script src="../../prototypes/cell.prototype.js"></script>
-		<script src="../../prototypes/input.prototype.js"></script>
+		<script src="../../prototypes/cellmatrix.prototype.js"></script>
 		<script src="../../prototypes/column.prototype.js"></script>
 		<script src="../../prototypes/layer.prototype.js"></script>
 		<script src="../../htm.controller.js"></script>
@@ -372,8 +372,7 @@
 				
 				// Create the input cells and layer
 				htmController.clear();
-				htmController.createInputCells( 1024 );
-				htmController.createLayer( params );
+				htmController.createTmLayer( params );
 			}
 			
 			
@@ -410,7 +409,7 @@
 				htmController.temporalMemory( 0, true );
 				
 				// Train cells in input layer to predict next input
-				htmController.inputLearn( 0 );
+				htmController.inputMemory( 0 );
 				
 				// Update the canvases displaying input and layer cell states
 				drawInputCells();
@@ -421,15 +420,15 @@
 			}
 			
 			/*
-			* Use how well apical connections of input cells connect with current input to
+			* Use how well apical connections of input cells connect with layer activity to
 			* predict which note will play next.
 			*/
 			function predictNote() {
 				var i, k, cell;
 				var keys = ['c', 'd', 'e', 'f', 'g'];
 				var scores = { 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': 0 };
-				for( i = 0; i < htmController.input.predictiveCells.length; i++ ) {
-					cell = htmController.input.predictiveCells[i];
+				for( i = 0; i < htmController.layers[0].proximalInput.predictiveCells.length; i++ ) {
+					cell = htmController.layers[0].proximalInput.predictiveCells[i];
 					if( cell.apicalLearnSegment !== null ) {
 						for( k = 0; k < keys.length; k++ ) {
 							if( inArray( cell.index, notes[keys[k]] ) ) {
@@ -540,10 +539,11 @@
 			*/
 			function drawInputCells() {
 				var x, input;
+				var layer = htmController.layers[0];
 				inputCellsImage = inputCtx.createImageData( inputGrid );
 				inputCellsImage.data.set( inputGrid.data );
 				for( x = 0; x < 1024; x++ ) {
-					input = htmController.input.cells[x];
+					input = layer.proximalInput.cells[x];
 					if( input.active || input.predictive ) {
 						drawCell( x, 0, 1024, inputCellsImage, input.active, input.predictive );
 					}
