@@ -78,7 +78,7 @@ function HTMController() {
 			inputCells = my.createInputCells( layerParams );
 		}
 		// Create the layer
-		var layer = new Layer( layerParams, inputCells );
+		var layer = new Layer( layerParams, [inputCells] );
 		// Set the layer's distal input to its own cell matrix
 		layer.distalInput = layer.cellMatrix;
 		my.layers.push( layer ); // Save for easy lookup
@@ -89,15 +89,19 @@ function HTMController() {
 	/**
 	 * This function activates the columns in a layer which best match the input,
 	 * and if learning is enabled, adjusts the columns to better match the input.
+	 * 
+	 * Note: The active input SDRs must align with the proximal input cell matrices
+	 * in the layer.
 	 */
-	this.spatialPooling = function( layerIdx, activeInputSDR, learningEnabled ) {
-		var c, i, synapse, column, cell;
+	this.spatialPooling = function( layerIdx, activeInputSDRs, learningEnabled ) {
+		var c, i, input, indexes, synapse, column, cell;
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
 		
 		// Clear input cell states
-		layer.proximalInput.resetActiveStates();
-		layer.proximalInput.resetPredictiveStates();
+		for( i = 0; i < layer.proximalInputs.length; i++ ) {
+			layer.proximalInputs[i].resetActiveStates().resetPredictiveStates();
+		}
 		
 		// Reset the column scores
 		for( i = 0; i < layer.columns.length; i++ ) {
@@ -106,17 +110,21 @@ function HTMController() {
 		
 		// Update active state of input cells which match the specified SDR.
 		// If learning is enabled, also set their learn state.
-		for( i = 0; i < activeInputSDR.length; i++ ) {
-			cell = layer.proximalInput.cells[activeInputSDR[i]];
-			cell.active = true;
-			layer.proximalInput.activeCells.push( cell );
-			if( learn ) { // Learning enabled, set learn states
-				cell.learning = true;
-				layer.proximalInput.learningCells.push( cell );
+		for( i = 0; i < activeInputSDRs.length; i++ ) {
+			indexes = activeInputSDRs[i];
+			input = layer.proximalInputs[i];
+			for( c = 0; c < indexes.length; c++ ) {
+				cell = input.cells[indexes[c]];
+				cell.active = true;
+				input.activeCells.push( cell );
+				if( learn ) { // Learning enabled, set learn states
+					cell.learning = true;
+					input.learningCells.push( cell );
+				}
 			}
+			// Activate input cells (also calculates the column scores)
+			my.activateCellMatrix( input, my.timestep + 1 ); // Timestep incremented in TM phase
 		}
-		// Activate input cells (also calculates the column scores)
-		my.activateCellMatrix( layer.proximalInput, my.timestep + 1 ); // Timestep incremented in TM phase
 		
 		// Select the columns with the highest scores to become active
 		var bestColumns = [];
@@ -191,9 +199,12 @@ function HTMController() {
 	 * the heavier-weight classifier logic for making predictions one timestep in the future.
 	 */
 	this.inputMemory = function( layerIdx ) {
+		var i;
 		var layer = my.layers[layerIdx];
 		
-		my.trainCellMatrix( layer.cellMatrix, layer.proximalInput, APICAL );
+		for( i = 0; i < layer.proximalInputs.length; i++ ) {
+			my.trainCellMatrix( layer.cellMatrix, layer.proximalInputs[i], APICAL );
+		}
 	}
 	
 	/**

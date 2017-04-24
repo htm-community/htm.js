@@ -74,6 +74,7 @@ function CellMatrix( params, cells ) {
 		}
 		// Clear learning cells array
 		my.learningCells = [];
+		return my;  // Allows chaining function calls
 	}
 
 	/**
@@ -95,6 +96,7 @@ function CellMatrix( params, cells ) {
 		}
 		// Clear predictive cells array
 		my.predictiveCells = [];
+		return my;  // Allows chaining function calls
 	}
 	
 	/**

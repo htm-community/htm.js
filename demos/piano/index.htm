@@ -373,7 +373,7 @@
 				$( "#history" ).append( note.toUpperCase() + " " );
 				
 				// Spatial Pooling (SP) phase
-				htmController.spatialPooling( 0, notes[note], true );
+				htmController.spatialPooling( 0, [notes[note]], true );
 				
 				// Temporal Memory (TM) phase
 				htmController.temporalMemory( 0, true );
@@ -397,8 +397,8 @@
 				var i, k, cell;
 				var keys = ['c', 'd', 'e', 'f', 'g'];
 				var scores = { 'c': 0, 'd': 0, 'e': 0, 'f': 0, 'g': 0 };
-				for( i = 0; i < htmController.layers[0].proximalInput.predictiveCells.length; i++ ) {
-					cell = htmController.layers[0].proximalInput.predictiveCells[i];
+				for( i = 0; i < htmController.layers[0].proximalInputs[0].predictiveCells.length; i++ ) {
+					cell = htmController.layers[0].proximalInputs[0].predictiveCells[i];
 					if( cell.apicalLearnSegment !== null ) {
 						for( k = 0; k < keys.length; k++ ) {
 							if( inArray( cell.index, notes[keys[k]] ) ) {
@@ -513,7 +513,7 @@
 				inputCellsImage = inputCtx.createImageData( inputGrid );
 				inputCellsImage.data.set( inputGrid.data );
 				for( x = 0; x < 1024; x++ ) {
-					input = layer.proximalInput.cells[x];
+					input = layer.proximalInputs[0].cells[x];
 					if( input.active || input.predictive ) {
 						drawCell( x, 0, 1024, inputCellsImage, input.active, input.predictive );
 					}

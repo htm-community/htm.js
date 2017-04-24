@@ -13,13 +13,13 @@
  * instantiated (for example, when distal input comes from the layer's
  * own cells, as required for temporal memory).
  */
-function Layer( params, proximalInput, distalInput, apicalInput ) {
+function Layer( params, proximalInputs, distalInput, apicalInput ) {
 	var my = this;
 	
 	this.columns = [];  // Array of columns contained in this layer
 	this.activeColumns = [];   // Array of only the active columns
 
-	this.proximalInput = ( ( typeof proximalInput === 'undefined' ) ? null : proximalInput ); // Feed-forward input cells
+	this.proximalInputs = ( ( typeof proximalInputs === 'undefined' ) ? [] : proximalInputs ); // Feed-forward input cells
 	this.distalInput = ( ( typeof distalInput === 'undefined' ) ? null : distalInput ); // distal input cells
 	this.apicalInput = ( ( typeof apicalInput === 'undefined' ) ? null : apicalInput ); // apical input cells
 	
@@ -33,20 +33,23 @@ function Layer( params, proximalInput, distalInput, apicalInput ) {
 	 * input cells.
 	 */
 	this.addColumn = function() {
-		var i, p, perm, synapse;
+		var i, c, p, input, perm, synapse;
 		var column = new Column( my.columns.length, my.columns.length * my.params.cellsPerColumn, my.params.cellsPerColumn, my );
 		
 		// Randomly connect columns to input cells, for use in spatial pooling
-		if( ( my.proximalInput !== null ) && !my.params.skipSpatialPooling ) {
-			for( i = 0; i < my.proximalInput.cells.length; i++ ) {
-				p = Math.floor( Math.random() * 100 );
-				if( p < my.params.potentialPercent ) {
-					perm = Math.floor( Math.random() * 100 );
-					if( perm > my.params.connectedPermanence ) {
-						// Start with weak connections (for faster initial learning)
-						perm = my.params.connectedPermanence;
+		if( !my.params.skipSpatialPooling ) {
+			for( i = 0; i < my.proximalInputs.length; i++ ) {
+				input = my.proximalInputs[i];
+				for( c = 0; c < input.cells.length; c++ ) {
+					p = Math.floor( Math.random() * 100 );
+					if( p < my.params.potentialPercent ) {
+						perm = Math.floor( Math.random() * 100 );
+						if( perm > my.params.connectedPermanence ) {
+							// Start with weak connections (for faster initial learning)
+							perm = my.params.connectedPermanence;
+						}
+						synapse = new Synapse( input.cells[c], column.proximalSegment, perm );
 					}
-					synapse = new Synapse( my.proximalInput.cells[i], column.proximalSegment, perm );
 				}
 			}
 		}
@@ -67,10 +70,11 @@ function Layer( params, proximalInput, distalInput, apicalInput ) {
 	 */
 	this.clear = function() {
 		if( my !== null ) {
+			my.cellMatrix.clear();
 			my.cellMatrix = null;
 			my.columns = null;
 			my.activeColumns = null;
-			my.proximalInput = null;
+			my.proximalInputs = null;
 			my.distalInput = null;
 			my.apicalInput = null;
 			my.params = null;
