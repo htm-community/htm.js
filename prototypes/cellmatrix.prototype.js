@@ -9,13 +9,15 @@ function CellMatrix( params, cells ) {
 	
 	this.params = params;
 	this.cells = ( ( typeof cells === 'undefined' ) ? [] : cells );
-	this.activeCells = [];     // Array of only the active cells
-	this.learningCells = [];   // Array of only the learning cells
-	this.predictiveCells = []; // Array of only the predictive cells
+	this.activeCells = [];          // Array of only the active cells
+	this.predictedActiveCells = []; // Array of only the active cells which were predicted
+	this.learningCells = [];        // Array of only the learning cells
+	this.predictiveCells = [];      // Array of only the predictive cells
 
-	this.activeCellHistory = [];     // Reverse-order history of active cells
-	this.learningCellHistory = [];   // Reverse-order history of learning cells
-	this.predictiveCellHistory = []; // Reverse-order history of predictive cells
+	this.activeCellHistory = [];          // Reverse-order history of active cells
+	this.predictedActiveCellHistory = []; // Reverse-order history of active cells which were predicted
+	this.learningCellHistory = [];        // Reverse-order history of learning cells
+	this.predictiveCellHistory = [];      // Reverse-order history of predictive cells
 	
 	
 	/**
@@ -28,10 +30,16 @@ function CellMatrix( params, cells ) {
 		if( my.activeCellHistory.length > my.params.historyLength ) {
 			my.activeCellHistory.length = my.params.historyLength;
 		}
+		// Save predicted active cells history
+		my.predictedActiveCellHistory.unshift( my.predictedActiveCells );
+		if( my.predictedActiveCellHistory.length > my.params.historyLength ) {
+			my.predictedActiveCellHistory.length = my.params.historyLength;
+		}
 		// Reset active cells
 		for( c = 0; c < my.activeCells.length; c++ ) {
 			cell = my.activeCells[c];
 			cell.active = false;
+			cell.predictedActive = false;
 			cell.distalLearnSegment = null; // Reset previous distal learn segment
 			cell.apicalLearnSegment = null; // Reset previous apical learn segment
 			// If cell is in a column, clear segment activity (this isn't used for cells which feed SP)
@@ -62,6 +70,8 @@ function CellMatrix( params, cells ) {
 		}
 		// Clear active cells array
 		my.activeCells = [];
+		// Clear predicted active cells array
+		my.predictedActiveCells = [];
 		// Save learning cells history
 		my.learningCellHistory.unshift( my.learningCells );
 		if( my.learningCellHistory.length > my.params.historyLength ) {
@@ -106,6 +116,7 @@ function CellMatrix( params, cells ) {
 		if( my !== null ) {
 			my.cells = null;
 			my.activeCells = null;
+			my.predictedActiveCells = null;
 			my.predictiveCells = null;
 			my.learningCells = null;
 			my.activeCellHistory = null;

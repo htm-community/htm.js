@@ -94,18 +94,20 @@ function HTMController() {
 	 * in the layer.
 	 */
 	this.spatialPooling = function( layerIdx, activeInputSDRs, learningEnabled ) {
-		var c, i, input, indexes, synapse, column, cell;
+		var c, i, randomIndexes, input, indexes, synapse, column, cell;
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
 		
-		// Clear input cell states
+		// Clear input cell active states
 		for( i = 0; i < layer.proximalInputs.length; i++ ) {
-			layer.proximalInputs[i].resetActiveStates().resetPredictiveStates();
+			layer.proximalInputs[i].resetActiveStates();
 		}
 		
 		// Reset the column scores
 		for( i = 0; i < layer.columns.length; i++ ) {
-			layer.columns[i].score = 0;
+			layer.columns[i].overlapActive = 0;
+			layer.columns[i].overlapPredictedActive = 0;
+			layer.columns[i].score = null;
 		}
 		
 		// Update active state of input cells which match the specified SDR.
@@ -117,12 +119,27 @@ function HTMController() {
 				cell = input.cells[indexes[c]];
 				cell.active = true;
 				input.activeCells.push( cell );
+				// If cell was predicted, add to predictedActive list as well
+				if( cell.predictive ) {
+					cell.predictedActive = true;
+					input.predictedActiveCells.push( cell );
+				}
 				if( learn ) { // Learning enabled, set learn states
 					cell.learning = true;
 					input.learningCells.push( cell );
 				}
 			}
-			// Activate input cells (also calculates the column scores)
+		}
+		
+		// Clear input cell predictive states
+		for( i = 0; i < layer.proximalInputs.length; i++ ) {
+			layer.proximalInputs[i].resetPredictiveStates();
+		}
+		
+		// Activate the input cells (may generate new predictions)
+		for( i = 0; i < activeInputSDRs.length; i++ ) {
+			input = layer.proximalInputs[i];
+			// Activate input cells (also generates new column scores)
 			my.activateCellMatrix( input, my.timestep + 1 ); // Timestep incremented in TM phase
 		}
 		
@@ -134,6 +151,11 @@ function HTMController() {
 		}
 		for( i = 0; i < layer.columns.length; i++ ) {
 			column = layer.columns[i];
+			// Calculate the column score
+			if( column.score === null ) {
+				// For typical SP, this is just the overlap with active input cells
+				column.score = column.overlapActive;
+			}
 			for( c = 0; c < activeColumnCount; c++ ) {
 				if( ( !( c in bestColumns ) ) || bestColumns[c].score < column.score ) {
 					bestColumns.splice( c, 0, column );
@@ -229,6 +251,8 @@ function HTMController() {
 				if( cell.predictive ) {
 					cell.active = true; // Activate predictive cell
 					layer.cellMatrix.activeCells.push( cell );
+					cell.predictedActive = true;
+					layer.cellMatrix.predictedActiveCells.push( cell );
 					if( learn ) {
 						cell.learning = true;  // Flag cell for learning
 						layer.cellMatrix.learningCells.push( cell );
@@ -339,7 +363,10 @@ function HTMController() {
 				if( synapse.segment.cellRx === null ) {
 					// This is the proximal segment of a column.  Just update the column score.
 					if( synapse.permanence >= cellMatrix.params.connectedPermanence ) {
-						synapse.segment.column.score++;
+						synapse.segment.column.overlapActive++;
+						if( cell.predictedActive ) {
+							synapse.segment.column.overlapPredictedActive++;
+						}
 					}
 				} else {
 					// This is the segment of a cell.  Determine if state should be updated.

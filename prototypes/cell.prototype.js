@@ -24,6 +24,7 @@ function Cell( matrix, index, x, y, column ) {
 	this.apicalLearnSegment = null;  // Apical segment to train
 	
 	this.active = false;
+	this.predictedActive = false; // cell was correctly predicted
 	this.predictive = false;
 	this.learning = false;
 	

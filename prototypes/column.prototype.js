@@ -8,7 +8,9 @@ function Column( index, cellIndex, cellsPerColumn, layer ) {
 	this.index = index; // Index of this column in its layer
 	this.layer = layer; // Layer containing this column
 	
-	this.score = 0;  // How well column matches current input
+	this.overlapActive = 0;          // Count of connections with active input cells
+	this.overlapPredictedActive = 0; // Count of connections with correctly predicted input cells
+	this.score = null;               // How well column matches current input
 	
 	this.cells = []; // Array of cells in this column
 	
