@@ -15,8 +15,6 @@ function HTMController() {
 	
 	this.layers = []; // Each layer created is stored here for easy lookup
 	
-	this.timestep = 0; // Used for tracking least recently used resources
-	
 	// Defaults to use for any param not specified:
 	this.defaultParams = {
 		'columnCount'               :  2048,
@@ -87,8 +85,9 @@ function HTMController() {
 	}
 	
 	/**
-	 * This function activates the columns in a layer which best match the input,
-	 * and if learning is enabled, adjusts the columns to better match the input.
+	 * This function increments a layer's timestep and activates its columns which
+	 * best match the input.  If learning is enabled, adjusts the columns to better
+	 * match the input.
 	 * 
 	 * Note: The active input SDRs must align with the proximal input cell matrices
 	 * in the layer.
@@ -97,6 +96,8 @@ function HTMController() {
 		var c, i, randomIndexes, input, indexes, synapse, column, cell;
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
+		
+		layer.timestep++;
 		
 		// Clear input cell active states
 		for( i = 0; i < layer.proximalInputs.length; i++ ) {
@@ -140,7 +141,7 @@ function HTMController() {
 		for( i = 0; i < activeInputSDRs.length; i++ ) {
 			input = layer.proximalInputs[i];
 			// Activate input cells (also generates new column scores)
-			my.activateCellMatrix( input, my.timestep + 1 ); // Timestep incremented in TM phase
+			my.activateCellMatrix( input, layer.timestep );
 		}
 		
 		// Select the columns with the highest scores to become active
@@ -200,8 +201,6 @@ function HTMController() {
 		var learn = ( ( typeof learningEnabled === 'undefined' ) ? false : learningEnabled );
 		var layer = my.layers[layerIdx];
 		
-		my.timestep++;
-		
 		// Phase 1: Activate
 		my.tmActivate( layer, learn );
 		
@@ -225,7 +224,7 @@ function HTMController() {
 		var layer = my.layers[layerIdx];
 		
 		for( i = 0; i < layer.proximalInputs.length; i++ ) {
-			my.trainCellMatrix( layer.cellMatrix, layer.proximalInputs[i], APICAL );
+			my.trainCellMatrix( layer.cellMatrix, layer.proximalInputs[i], APICAL, layer.timestep );
 		}
 	}
 	
@@ -330,7 +329,7 @@ function HTMController() {
 		}
 		
 		// Transmit queued activity to receiving synapses to generate predictions
-		my.activateCellMatrix( layer.cellMatrix, my.timestep );
+		my.activateCellMatrix( layer.cellMatrix, layer.timestep );
 	}
 	
 	/**
@@ -342,7 +341,7 @@ function HTMController() {
 	 */
 	this.tmLearn = function( layer ) {
 		
-		my.trainCellMatrix( layer.distalInput, layer.cellMatrix, DISTAL );
+		my.trainCellMatrix( layer.distalInput, layer.cellMatrix, DISTAL, layer.timestep );
 	}
 	
 	/**
@@ -432,7 +431,7 @@ function HTMController() {
 	 * align with previously active cells in a transmitting cell matrix. Enforces
 	 * good predictions and degrades wrong predictions.
 	 */
-	this.trainCellMatrix = function( cellMatrixTx, cellMatrixRx, inputType ) {
+	this.trainCellMatrix = function( cellMatrixTx, cellMatrixRx, inputType, timestep ) {
 		var c, s, randomIndexes, cell, segment, synapse;
 		
 		if( ( cellMatrixTx.activeCellHistory.length > 0 ) && ( cellMatrixRx.predictiveCellHistory.length > 0 ) ) {
@@ -470,7 +469,7 @@ function HTMController() {
 				{
 					if( cell.active ) {
 						// Correct prediction.  Train it to better align with activity.
-						my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params );
+						my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params, timestep );
 					} else {
 						// Wrong prediction.  Degrade connections on this segment.
 						for( s = 0; s < segment.synapses.length; s++ ) {
@@ -522,11 +521,11 @@ function HTMController() {
 							&& segment.activeSynapsesHistory[0].length > 0 )
 						{
 							// Found a matching segment.  Train it to better align with activity.
-							my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params );
+							my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params, timestep );
 						} else {
 							// No matching segment.  Create a new one.
 							segment = new Segment( inputType, cell, cell.column );
-							segment.lastUsedTimestep = my.timestep;
+							segment.lastUsedTimestep = timestep;
 							// Connect segment with random sampling of previously active learning cells, up to max new synapse count
 							randomIndexes = my.randomIndexes( cellMatrixTx.learningCellHistory[0].length, cellMatrixRx.params.maxNewSynapseCount, false );
 							for( s = 0; s < randomIndexes.length; s++ ) {
@@ -545,7 +544,7 @@ function HTMController() {
 	 * Active synapses are enforced, inactive synapses are degraded, and new synapses are formed
 	 * with a random sampling of the active cells, up to max new synapses.
 	 */
-	this.trainSegment = function( segment, activeCells, params ) {
+	this.trainSegment = function( segment, activeCells, params, timestep ) {
 		var s, i, synapse, segments, segmentIndex, lruSegmentIndex;
 		var randomIndexes = my.randomIndexes( activeCells.length, params.maxNewSynapseCount, false );
 		var inactiveSynapses = segment.synapses.slice();  // Inactive synapses (will remove active ones below)
@@ -613,7 +612,7 @@ function HTMController() {
 				}
 				// Add new segment to this cell
 				segment = new Segment( segment.type, segment.cellRx, segment.cellRx.column );
-				segment.lastUsedTimestep = my.timestep;
+				segment.lastUsedTimestep = timestep;
 			}
 			// Add new synapse to this segment
 			synapse = new Synapse( activeCells[randomIndexes[i]], segment, params.initialPermanence );

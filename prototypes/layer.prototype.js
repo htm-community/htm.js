@@ -5,10 +5,14 @@
  * same layer or from another layer). Cells also have apical dendrites
  * connecting them to cells in other layers or regions.
  * 
- * Notes: proximalInput must be specified if spatial pooling is enabled.
+ * Notes:
+ * ProximalInput must be specified if spatial pooling is enabled.
+ * 
  * To skip SP, set param "skipSpatialPooling" = true, and then manually
- * create columns with addColumn() (columns will then require manual
- * activation prior to calling htmController.temporalMemory function).
+ * create columns with addColumn().  Without SP, the layer's timestep
+ * must be incremented manually, as well as manual column activations
+ * prior to calling htmController.temporalMemory function.
+ * 
  * distalInput and apicalInput may be specified after the layer is
  * instantiated (for example, when distal input comes from the layer's
  * own cells, as required for temporal memory).
@@ -25,6 +29,8 @@ function Layer( params, proximalInputs, distalInput, apicalInput ) {
 	
 	this.params = params;
 	this.cellMatrix = new CellMatrix( this.params ); // A matrix containing all cells in the layer
+	
+	this.timestep = 0; // Used for tracking least recently used resources
 	
 	/**
 	 * This function adds a new column to the layer, and creates all of
@@ -78,6 +84,7 @@ function Layer( params, proximalInputs, distalInput, apicalInput ) {
 			my.distalInput = null;
 			my.apicalInput = null;
 			my.params = null;
+			my.timestep = null;
 			my = null;
 		}
 	}

@@ -489,6 +489,8 @@
 				
 				// Activate columns for this note
 				layer.activeColumns = columns[note];
+				// Increment timestep (normally would happen in SP phase)
+				layer.timestep++;
 				
 				// Temporal Memory (TM) phase
 				htmController.temporalMemory( 0, true );
