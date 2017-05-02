@@ -5,6 +5,8 @@
 var PROXIMAL   = 0;
 var DISTAL     = 1;
 var APICAL     = 2;
+var TM_LAYER   = 0; // Receives distal input from own cells
+var TP_LAYER   = 1; // Produces stable representations
 
 /**
  * The HTMController contains high-level HTM functions.
@@ -17,23 +19,34 @@ function HTMController() {
 	
 	// Defaults to use for any param not specified:
 	this.defaultParams = {
-		'columnCount'               :  2048,
-		'cellsPerColumn'            :    32,
-		'activationThreshold'       :    13,
-		'initialPermanence'         :    21,  // %
-		'connectedPermanence'       :    50,  // %
-		'minThreshold'              :    10,
-		'maxNewSynapseCount'        :    32,
-		'permanenceIncrement'       :    10,  // %
-		'permanenceDecrement'       :    10,  // %
-		'predictedSegmentDecrement' :     1,  // %
-		'maxSegmentsPerCell'        :   128,
-		'maxSynapsesPerSegment'     :   128,
-		'potentialPercent'          :    50,  // %
-		'sparsity'                  :     2,  // %
-		'inputCellCount'            :  1024,
-		'skipSpatialPooling'        : false,
-		'historyLength'             :     2
+		'columnCount'                 :  2048,
+		'cellsPerColumn'              :    32,
+		'activationThreshold'         :    13,
+		'initialPermanence'           :    21,  // %
+		'connectedPermanence'         :    50,  // %
+		'minThreshold'                :    10,
+		'maxNewSynapseCount'          :    32,
+		'permanenceIncrement'         :    10,  // %
+		'permanenceDecrement'         :    10,  // %
+		'predictedSegmentDecrement'   :     1,  // %
+		'maxSegmentsPerCell'          :   128,
+		'maxSynapsesPerSegment'       :   128,
+		'potentialPercent'            :    50,  // %
+		'sparsity'                    :     2,  // %
+		'inputCellCount'              :  1024,
+		'skipSpatialPooling'          : false,
+		'historyLength'               :     2,
+		// Temporal Pooling parameters
+		'tpSparsity'                  :     10,  // %
+		'meanLifetime'                :     4,
+		'excitationMin'               :     10,
+		'excitationMax'               :     20,
+		'excitationXMidpoint'         :     5,
+		'excitationSteepness'         :     1,
+		'weightActive'                :     1,
+		'weightPredictedActive'       :     4,
+		'forwardPermananceIncrement'  :     2,
+		'backwardPermananceIncrement' :     1
 	};
 	
 	/**
@@ -53,32 +66,51 @@ function HTMController() {
 	}
 	
 	/**
-	 * This function generates a new temporal memory layer.  If spatial
-	 * pooling is enabled, a matrix of input cells is also created,
-	 * containing the number specified in the params.
+	 * This function generates a new layer.  If spatial pooling is enabled
+	 * and an input layer is not specified, a matrix of input cells is also
+	 * created, containing the cell count specified in the params.
 	 * 
-	 * (a TM layer is one which receives distal input from its own cells)
+	 * TM_LAYER is a layer which receives distal input from its own cells.
+	 * TP_LAYER is a layer which produces stable representations.
 	 */
-	this.createTmLayer = function( params ) {
+	this.createLayer = function( params, layerType, inputLayerIdx ) {
+		var property;
+		var type = ( ( typeof layerType === 'undefined' ) ? TM_LAYER : layerType );
+		var inputLayer = ( ( typeof inputLayerIdx === 'undefined' ) ? null : my.layers[inputLayerIdx] );
+
+		// Start with a copy of the default params
+		var layerParams = [];
+		for( property in my.defaultParams ) {
+			if( my.defaultParams.hasOwnProperty( property ) ) {
+				layerParams[property] = my.defaultParams[property];
+			}
+		}
 		// Override default params with any provided
-		var layerParams = my.defaultParams;
 		if( ( typeof params !== 'undefined' ) && ( params !== null ) ) {
-			for( var property in params ) {
+			for( property in params ) {
 				if( params.hasOwnProperty( property ) ) {
 					layerParams[property] = params[property];
 				}
 			}
 		}
 		
-		// If spatial pooling is enabled, create a matrix of input cells
-		var inputCells = null; 
-		if( !layerParams.skipSpatialPooling ) {
+		// Determine where feed-forward input should come from
+		var inputCells = null;
+		if( inputLayer !== null ) {
+			// Input coming from another layer
+			inputCells = inputLayer.cellMatrix;
+		} else if( !layerParams.skipSpatialPooling ) {
+			// Create a new matrix of input cells
 			inputCells = my.createInputCells( layerParams );
 		}
 		// Create the layer
-		var layer = new Layer( layerParams, [inputCells] );
-		// Set the layer's distal input to its own cell matrix
-		layer.distalInput = layer.cellMatrix;
+		var layer = new Layer( layerParams, layerType, [inputCells] );
+		
+		if( type == TM_LAYER || type == TP_LAYER ) {
+			// TM and TP layers receive distal input from their own cell matrix
+			layer.distalInput = layer.cellMatrix;
+		}
+		
 		my.layers.push( layer ); // Save for easy lookup
 		
 		return my; // Allows chaining function calls
@@ -88,6 +120,8 @@ function HTMController() {
 	 * This function increments a layer's timestep and activates its columns which
 	 * best match the input.  If learning is enabled, adjusts the columns to better
 	 * match the input.
+	 * 
+	 * This function also performs temporal pooling if layer is configured as such.
 	 * 
 	 * Note: The active input SDRs must align with the proximal input cell matrices
 	 * in the layer.
@@ -99,49 +133,45 @@ function HTMController() {
 		
 		layer.timestep++;
 		
-		// Clear input cell active states
-		for( i = 0; i < layer.proximalInputs.length; i++ ) {
-			layer.proximalInputs[i].resetActiveStates();
-		}
-		
-		// Reset the column scores
-		for( i = 0; i < layer.columns.length; i++ ) {
-			layer.columns[i].overlapActive = 0;
-			layer.columns[i].overlapPredictedActive = 0;
-			layer.columns[i].score = null;
-		}
-		
-		// Update active state of input cells which match the specified SDR.
-		// If learning is enabled, also set their learn state.
-		for( i = 0; i < activeInputSDRs.length; i++ ) {
-			indexes = activeInputSDRs[i];
-			input = layer.proximalInputs[i];
-			for( c = 0; c < indexes.length; c++ ) {
-				cell = input.cells[indexes[c]];
-				cell.active = true;
-				input.activeCells.push( cell );
-				// If cell was predicted, add to predictedActive list as well
-				if( cell.predictive ) {
-					cell.predictedActive = true;
-					input.predictedActiveCells.push( cell );
-				}
-				if( learn ) { // Learning enabled, set learn states
-					cell.learning = true;
-					input.learningCells.push( cell );
+		// If we were given activeInputSDRs, update input cell activity to match
+		if( activeInputSDRs.length > 0 ) {
+			// Clear input cell active states
+			for( i = 0; i < layer.proximalInputs.length; i++ ) {
+				layer.proximalInputs[i].resetActiveStates();
+			}
+			
+			// Update active state of input cells which match the specified SDR.
+			// If learning is enabled, also set their learn state.
+			for( i = 0; i < activeInputSDRs.length; i++ ) {
+				indexes = activeInputSDRs[i];
+				input = layer.proximalInputs[i];
+				for( c = 0; c < indexes.length; c++ ) {
+					cell = input.cells[indexes[c]];
+					cell.active = true;
+					input.activeCells.push( cell );
+					// If cell was predicted, add to predictedActive list as well
+					if( cell.predictive ) {
+						cell.predictedActive = true;
+						input.predictedActiveCells.push( cell );
+					}
+					if( learn ) { // Learning enabled, set learn states
+						cell.learning = true;
+						input.learningCells.push( cell );
+					}
 				}
 			}
-		}
-		
-		// Clear input cell predictive states
-		for( i = 0; i < layer.proximalInputs.length; i++ ) {
-			layer.proximalInputs[i].resetPredictiveStates();
-		}
-		
-		// Activate the input cells (may generate new predictions)
-		for( i = 0; i < activeInputSDRs.length; i++ ) {
-			input = layer.proximalInputs[i];
-			// Activate input cells (also generates new column scores)
-			my.activateCellMatrix( input, layer.timestep );
+			
+			// Clear input cell predictive states
+			for( i = 0; i < layer.proximalInputs.length; i++ ) {
+				layer.proximalInputs[i].resetPredictiveStates();
+			}
+			
+			// Activate the input cells (may generate new predictions)
+			for( i = 0; i < activeInputSDRs.length; i++ ) {
+				input = layer.proximalInputs[i];
+				// Activate input cells (also generates new column scores)
+				my.activateCellMatrix( input, layer.timestep );
+			}
 		}
 		
 		// Select the columns with the highest scores to become active
@@ -154,12 +184,21 @@ function HTMController() {
 			column = layer.columns[i];
 			// Calculate the column score
 			if( column.score === null ) {
-				// For typical SP, this is just the overlap with active input cells
-				column.score = column.overlapActive;
+				if( layer.type == TM_LAYER ) {
+					// For TM layers, this is just the overlap with active input cells
+					column.score = column.overlapActive;
+				} else if( layer.type == TP_LAYER ) {
+					// For TP layers, use a weighted average of overlap with active and predicted active cells
+					column.score = ( parseFloat( column.overlapActive ) * parseFloat( layer.params.weightActive ) )
+						+ ( parseFloat( column.overlapPredictedActive ) * parseFloat( layer.params.weightPredictedActive ) );
+				}
 			}
+			// Check if this column has a higher score than what has already been chosen
 			for( c = 0; c < activeColumnCount; c++ ) {
+				// If bestColumns array is not full, or if score is better, add it
 				if( ( !( c in bestColumns ) ) || bestColumns[c].score < column.score ) {
 					bestColumns.splice( c, 0, column );
+					// Don't let bestColumns array grow larger than activeColumnCount
 					if( bestColumns.length > activeColumnCount ) {
 						bestColumns.length = activeColumnCount;
 					}
@@ -168,13 +207,24 @@ function HTMController() {
 			}
 		}
 		
-		// SP learning
-		if( learn ) {
-			for( i = 0; i < activeColumnCount; i++ ) {
-				column = bestColumns[i];
+		for( i = 0; i < activeColumnCount; i++ ) {
+			column = bestColumns[i];
+			if( layer.type == TP_LAYER ) {
+				// Increase the column persistence based on overlap with correctly predicted inputs
+				column.persistence = my.excite( column.persistence, column.overlapPredictedActive,
+					layer.params.excitationMin, layer.params.excitationMax, layer.params.excitationXMidpoint, layer.params.excitationSteepness );
+				column.initialPersistence = column.persistence;
+			}
+			column.lastUsedTimestep = layer.timestep;
+			// SP learning
+			if( learn ) {
 				for( c = 0; c < column.proximalSegment.synapses.length; c++ ) {
 					synapse = column.proximalSegment.synapses[c];
-					if( synapse.cellTx.active ) {
+					// For TM layers, enforce all active cells.  For TP layers, only correctly predicted cells
+					if(
+						( ( layer.type == TM_LAYER ) && synapse.cellTx.active )
+						|| ( ( layer.type == TP_LAYER ) && synapse.cellTx.predictedActive )
+					) {
 						synapse.permanence += layer.params.permanenceIncrement;
 						if( synapse.permanence > 100 ) {
 							synapse.permanence = 100;
@@ -189,7 +239,54 @@ function HTMController() {
 			}
 		}
 		
+		// Activated columns for a TP layer are those with highest persistence
+		if( layer.type == TP_LAYER ) {
+			// Clear the "bestColumns" array so it can be rebuilt.
+			bestColumns = [];
+			// Calculate a new active column count based on TP sparsity param
+			activeColumnCount = parseInt( ( parseFloat( layer.params.tpSparsity ) / 100 ) * layer.params.columnCount );
+			if( activeColumnCount < 1 ) {
+				activeColumnCount = 1;
+			}
+		}
+		
+		// Post-processing, cleanup
+		for( i = 0; i < layer.columns.length; i++ ) {
+			column = layer.columns[i];
+			if( layer.type == TP_LAYER ) {
+				// Generate a new set of "best columns" based on persistence values
+				for( c = 0; c < activeColumnCount; c++ ) {
+					// If bestColumns array is not full, or if score is better, add it
+					if( ( !( c in bestColumns ) ) || bestColumns[c].persistence < column.persistence ) {
+						// Only use column if it has some persistence
+						if( column.persistence > 0 ) {
+							bestColumns.splice( c, 0, column );
+							// Don't let bestColumns array grow larger than activeColumnCount
+							if( bestColumns.length > activeColumnCount ) {
+								bestColumns.length = activeColumnCount;
+							}
+						}
+						break;
+					}
+				}
+				// Decay persistence value
+				column.persistence = my.decay( layer.params.decayConstant,
+					column.initialPersistence, layer.timestep - column.lastUsedTimestep );
+			}
+			// Reset overlap scores
+			column.overlapActive = 0;
+			column.overlapPredictedActive = 0;
+			column.score = null;
+		}
+		
 		layer.activeColumns = bestColumns;
+		
+		
+		// TODO: Forward learning
+		
+		// TODO: Backward learning
+		
+		
 		return my; // Allows chaining function calls
 	}
 	
@@ -661,6 +758,22 @@ function HTMController() {
 			}
 		}
 		return results;
+	}
+	
+	/**
+	 * This function calculates an exponential decay
+	 * 
+	 * @param decayConstant: 1/meanLifetime
+	 */
+	this.decay = function( decayConstant, initialValue, timesteps ) {
+		return ( Math.exp( -decayConstant * timesteps ) * initialValue );
+	}
+	
+	/**
+	 * This function calculates a logistic excitement based on overlap
+	 */
+	this.excite = function( currentValue, overlap, minValue, maxValue, xMidpoint, steepness ) {
+		return ( currentValue + ( maxValue - minValue ) / ( 1 + Math.exp( -steepness * ( overlap - xMidpoint ) ) ) );
 	}
 	
 	/**

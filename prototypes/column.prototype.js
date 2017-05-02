@@ -11,6 +11,11 @@ function Column( index, cellIndex, cellsPerColumn, layer ) {
 	this.overlapActive = 0;          // Count of connections with active input cells
 	this.overlapPredictedActive = 0; // Count of connections with correctly predicted input cells
 	this.score = null;               // How well column matches current input
+	this.persistence = 0;
+	
+	// Used to calculate persistence decay
+	this.initialPersistence = 0;
+	this.lastUsedTimestep = 0;
 	
 	this.cells = []; // Array of cells in this column
 	

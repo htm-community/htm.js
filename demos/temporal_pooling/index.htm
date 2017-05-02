@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="utf-8" />
-		<title>HTM Piano</title>
+		<title>Temporal Pooling</title>
 		<style type="text/css">
 			table {
 				border-collapse: collapse;
@@ -10,6 +10,7 @@
 			}
 			th {
 				text-align: right;
+				padding: 0px;
 			}
 			td {
 				text-align: left;
@@ -20,9 +21,13 @@
 			}
 			canvas#input {
 				border: 1px solid grey;
-				margin-top: 32px;
+				margin-top: 16px;
 			}
 			canvas#layer {
+				border: 1px solid grey;
+				margin-top: 16px;
+			}
+			canvas#pooling {
 				border: 1px solid grey;
 				margin-top: 16px;
 			}
@@ -85,125 +90,184 @@
 		</style>
 	</head>
 	<body>
-		
-		<table id="layer_properties">
-			<thead>
-				<tr>
-					<th colspan=6 style="text-align: center"><h3>Layer Properties</h3></th>
-				</tr>
-			</thead>
-			<tbody>
-				<tr>
-					<th>Columns</th>
-					<td><input id="columnCount" type="number" min="1" max="1024" value="1024"></td>
-					<td><i>(1-1024)</i></td>
-					<th>Cells Per Column</th>
-					<td><input id="cellsPerColumn" type="number" min="1" max="32" value="32"></td>
-					<td><i>(1-32)</i></td>
-				</tr>
-				<tr>
-					<th>Activation Threshold</th>
-					<td><input id="activationThreshold" type="number" min="1" max="128" value="13"></td>
-					<td><i>(1-128)</i></td>
-					<th>Initial Permanence</th>
-					<td><input id="initialPermanence" type="number" min="1" max="100" value="50"></td>
-					<td><i>(1-100)</i></td>
-				</tr>
-				<tr>
-					<th>Connected Permanence</th>
-					<td><input id="connectedPermanence" type="number" min="1" max="100" value="50"></td>
-					<td><i>(1-100)</i></td>
-					<th>Minimum Threshold</th>
-					<td><input id="minThreshold" type="number" min="1" max="128" value="5"></td>
-					<td><i>(1-128)</i></td>
-				</tr>
-				<tr>
-					<th>Max New Synapse Count</th>
-					<td><input id="maxNewSynapseCount" type="number" min="1" max="32" value="16"></td>
-					<td><i>(1-32)</i></td>
-					<th>Permanence Increment</th>
-					<td><input id="permanenceIncrement" type="number" min="1" max="100" value="10"></td>
-					<td><i>(1-100)</i></td>
-				</tr>
-				<tr>
-					<th>Permanence Decrement</th>
-					<td><input id="permanenceDecrement" type="number" min="1" max="100" value="10"></td>
-					<td><i>(1-100)</i></td>
-					<th>Predicted Segment Decrement</th>
-					<td><input id="predictedSegmentDecrement" type="number" min="1" max="100" value="5"></td>
-					<td><i>(1-100)</i></td>
-				</tr>
-				<tr>
-					<th>Max Segments per Cell</th>
-					<td><input id="maxSegmentsPerCell" type="number" min="1" max="128" value="128"></td>
-					<td><i>(1-128)</i></td>
-					<th>Max Synapses per Segment</th>
-					<td><input id="maxSynapsesPerSegment" type="number" min="1" max="128" value="128"></td>
-					<td><i>(1-128)</i></td>
-				</tr>
-				<tr>
-					<th>Potential Percent</th>
-					<td><input id="potentialPercent" type="number" min="1" max="100" value="50"></td>
-					<td><i>(1-100)</i></td>
-					<th>Sparsity</th>
-					<td><input id="sparsity" type="number" min="1" max="100" value="2"></td>
-					<td><i>(1-100)</i></td>
-				</tr>
-			</tbody>
-		</table>
 		<div>
-			<button id="action" type="button">Begin</button>
-			<div id="legend_active"></div><span>Active</span>
-			<div id="legend_predictive"></div><span>Predictive</span>
+			<button id="action" type="button">Begin Simulation >></button>
+			<b id = "initializing" style="display:none;">Initializing...</b>
 		</div>
-		<h3 id="initializing" style="display:none">Initializing...</h3>
-		<div>
-			<canvas id="layer" width=1024 height=32 style="display:none;">
-				Your browser does not support the canvas element.
-			</canvas>
-			<canvas id="input" width=1024 height=1 style="display:none;">
-			</canvas>
+		<div id="properties">
+			<table>
+				<thead></thead>
+				<tbody>
+					<tr>
+						<th colspan=6 style="text-align: center"><h3>Layer Properties</h3></th>
+					</tr>
+					<tr>
+						<th>Columns</th>
+						<td><input id="columnCount" type="number" min="1" max="1024" value="1024"></td>
+						<td><i>(1-1024)</i></td>
+						<th>Cells Per Column</th>
+						<td><input id="cellsPerColumn" type="number" min="1" max="32" value="32"></td>
+						<td><i>(1-32)</i></td>
+					</tr>
+					<tr>
+						<th>Activation Threshold</th>
+						<td><input id="activationThreshold" type="number" min="1" max="128" value="13"></td>
+						<td><i>(1-128)</i></td>
+						<th>Initial Permanence</th>
+						<td><input id="initialPermanence" type="number" min="1" max="100" value="50"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th>Connected Permanence</th>
+						<td><input id="connectedPermanence" type="number" min="1" max="100" value="50"></td>
+						<td><i>(1-100)</i></td>
+						<th>Minimum Threshold</th>
+						<td><input id="minThreshold" type="number" min="1" max="128" value="5"></td>
+						<td><i>(1-128)</i></td>
+					</tr>
+					<tr>
+						<th>Max New Synapse Count</th>
+						<td><input id="maxNewSynapseCount" type="number" min="1" max="32" value="16"></td>
+						<td><i>(1-32)</i></td>
+						<th>Permanence Increment</th>
+						<td><input id="permanenceIncrement" type="number" min="1" max="100" value="10"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th>Permanence Decrement</th>
+						<td><input id="permanenceDecrement" type="number" min="1" max="100" value="10"></td>
+						<td><i>(1-100)</i></td>
+						<th>Predicted Segment Decrement</th>
+						<td><input id="predictedSegmentDecrement" type="number" min="1" max="100" value="5"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th>Max Segments per Cell</th>
+						<td><input id="maxSegmentsPerCell" type="number" min="1" max="128" value="128"></td>
+						<td><i>(1-128)</i></td>
+						<th>Max Synapses per Segment</th>
+						<td><input id="maxSynapsesPerSegment" type="number" min="1" max="128" value="128"></td>
+						<td><i>(1-128)</i></td>
+					</tr>
+					<tr>
+						<th>Potential Percent</th>
+						<td><input id="potentialPercent" type="number" min="1" max="100" value="10"></td>
+						<td><i>(1-100)</i></td>
+						<th>Sparsity</th>
+						<td><input id="sparsity" type="number" min="1" max="100" value="2"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th colspan=6 style="text-align: center"><h3>Temporal Pooling Properties</h3></th>
+					</tr>
+					<tr>
+						<th>TP Potential Percent</th>
+						<td><input id="tpPotentialPercent" type="number" min="1" max="100" value="2"></td>
+						<td><i>(1-100)</i></td>
+						<th>TP Sparsity</th>
+						<td><input id="tpSparsity" type="number" min="1" max="100" value="10"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th>History Length</th>
+						<td><input id="historyLength" type="number" min="2" max="20" value="4"></td>
+						<td><i>(2-20)</i></td>
+						<th>Mean Lifetime</th>
+						<td><input id="meanLifetime" type="number" min="1" max="40" value="4"></td>
+						<td><i>(1-40)</i></td>
+					</tr>
+					<tr>
+						<th>Excitation Min</th>
+						<td><input id="excitationMin" type="number" min="1" max="200" value="10"></td>
+						<td><i>(1-200)</i></td>
+						<th>Excitation Max</th>
+						<td><input id="excitationMax" type="number" min="1" max="200" value="20"></td>
+						<td><i>(1-200)</i></td>
+					</tr>
+					<tr>
+						<th>Excitation X Midpoint</th>
+						<td><input id="excitationXMidpoint" type="number" min="1" max="200" value="5"></td>
+						<td><i>(1-200)</i></td>
+						<th>Excitation Steepness</th>
+						<td><input id="excitationSteepness" type="number" min="1" max="40" value="1"></td>
+						<td><i>(1-40)</i></td>
+					</tr>
+					<tr>
+						<th>Weight Active</th>
+						<td><input id="weightActive" type="number" min="1" max="100" value="1"></td>
+						<td><i>(1-100)</i></td>
+						<th>Weight Predicted Active</th>
+						<td><input id="weightPredictedActive" type="number" min="1" max="100" value="4"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+					<tr>
+						<th>Forward Perm. Increment</th>
+						<td><input id="forwardPermananceIncrement" type="number" min="1" max="100" value="2"></td>
+						<td><i>(1-100)</i></td>
+						<th>Backward Perm. Increment</th>
+						<td><input id="backwardPermananceIncrement" type="number" min="1" max="100" value="1"></td>
+						<td><i>(1-100)</i></td>
+					</tr>
+				</tbody>
+			</table>
 		</div>
-		<table id="keyboard" style="display:none; width:300px;">
-			<thead></thead>
-			<tbody>
-				<tr>
-					<td colspan=3>
-						<table id="keyboard_top">
-							<thead></thead>
-							<tbody>
-								<tr>
-									<td class="key key_top key_c" data-key="c"></td>
-									<td class="key_black"></td>
-									<td class="key key_top key_d" data-key="d"></td>
-									<td class="key_black"></td>
-									<td class="key key_top key_e" data-key="e"></td>
-									<td class="key key_top key_f" data-key="f"></td>
-									<td class="key_black"></td>
-									<td class="key key_top key_g" data-key="g"></td>
-									<td class="key_black end"></td>
-								</tr>
-							</tbody>
-						</table>
-						<table id="keyboard_bottom">
-							<thead></thead>
-							<tbody>
-								<tr>
-									<td class="key key_bottom key_c" data-key="c"></td>
-									<td class="key key_bottom key_d" data-key="d"></td>
-									<td class="key key_bottom key_e" data-key="e"></td>
-									<td class="key key_bottom key_f" data-key="f"></td>
-									<td class="key key_bottom key_g" data-key="g"></td>
-								</tr>
-							</tbody>
-						</table>
-					</td>
-				</tr>
-			</tbody>
-		</table>
-		
-		<div id="predict" style="display:none;"><b>Prediction: </b><span id="prediction">(none)</span></div>
-		<div id="history" style="display:none;"></div>
+		<div id="interface" style="display:none;">
+			<div class="legend">
+				<div id="legend_active"></div><span>Active</span>
+				<div id="legend_predictive"></div><span>Predictive</span>
+			</div>
+			<div id="layers" style='width: 1030px; text-align: center;'>
+				<canvas id="pooling" width=1024 height=32>
+					Your browser does not support the canvas element.
+				</canvas><br />
+				Temporal Pooling Layer
+				<canvas id="layer" width=1024 height=32>
+				</canvas><br />
+				Temporal Memory Layer
+				<canvas id="input" width=1024 height=1>
+				</canvas><br />
+				Input Cells
+			</div>
+			<table id="keyboard" style="width:300px;">
+				<thead></thead>
+				<tbody>
+					<tr>
+						<td colspan=3>
+							<table id="keyboard_top">
+								<thead></thead>
+								<tbody>
+									<tr>
+										<td class="key key_top key_c" data-key="c"></td>
+										<td class="key_black"></td>
+										<td class="key key_top key_d" data-key="d"></td>
+										<td class="key_black"></td>
+										<td class="key key_top key_e" data-key="e"></td>
+										<td class="key key_top key_f" data-key="f"></td>
+										<td class="key_black"></td>
+										<td class="key key_top key_g" data-key="g"></td>
+										<td class="key_black end"></td>
+									</tr>
+								</tbody>
+							</table>
+							<table id="keyboard_bottom">
+								<thead></thead>
+								<tbody>
+									<tr>
+										<td class="key key_bottom key_c" data-key="c"></td>
+										<td class="key key_bottom key_d" data-key="d"></td>
+										<td class="key key_bottom key_e" data-key="e"></td>
+										<td class="key key_bottom key_f" data-key="f"></td>
+										<td class="key key_bottom key_g" data-key="g"></td>
+									</tr>
+								</tbody>
+							</table>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<div id="predict"><b>Prediction: </b><span id="prediction">(none)</span></div>
+			<div id="history"></div>
+		</div>
 		
 		<script src="../assets/scripts/jquery.min.js"></script>
 		<script src="../../prototypes/synapse.prototype.js"></script>
@@ -216,12 +280,14 @@
 		<script type="text/javascript">
 		
 			// Handles to various canvas elements for drawing
-			var inputImg, inputPx, layerImg, layerPx;
+			var inputImg, inputPx, layerImg, layerPx, poolingImg, poolingPx;
 			var inputCanvas = document.getElementById( "input" );
 			var inputCtx = inputCanvas.getContext( "2d" );
 			var layerCanvas = document.getElementById( "layer" );
 			var layerCtx = layerCanvas.getContext( "2d" );
-			var inputGrid, layerGrid;
+			var poolingCanvas = document.getElementById( "pooling" );
+			var poolingCtx = poolingCanvas.getContext( "2d" );
+			var inputGrid, layerGrid, poolingGrid;
 			var cellHeight = 1;
 			
 			// Load the notes
@@ -237,32 +303,26 @@
 					// User clicked the action button
 					if( $( this ).hasClass( "in_progress" ) ) {
 						// Stop the simulation
-						$( this ).html( "Begin" );
+						$( this ).html( "Begin Simulation >>" );
 						$( this ).removeClass( "in_progress" );
 						$( ".line" ).remove();
 						$( ".cell" ).remove();
-						$( "#history" ).hide();
-						$( "#predict" ).hide();
-						$( "#input" ).hide();
-						$( "#layer" ).hide();
-						$( "#keyboard" ).hide();
-						destroyLayer();
+						$( "#properties" ).show();
+						$( "#interface" ).hide();
+						destroyLayers();
 					} else {
 						// Start the simulation
-						$( this ).html( "Stop" );
+						$( this ).html( "End Simulation <<" );
 						$( this ).addClass( "in_progress" );
 						$( "#action" ).hide();
 						$( "#initializing" ).show();
 						// Using setTimeout, so processing message has time to appear
 						setTimeout( function() {
-							createLayer();
+							createLayers();
 							$( "#initializing" ).hide();
 							$( "#action" ).show();
-							$( "#keyboard" ).show();
-							$( "#layer" ).show();
-							$( "#input" ).show();
-							$( "#predict" ).show();
-							$( "#history" ).show();
+							$( "#properties" ).hide();
+							$( "#interface" ).show();
 						}, 50 );
 					}
 				});
@@ -322,11 +382,17 @@
 			* Constructs the layer's data structures and connections according to
 			* the specified parameters, and represents it as a table grid on the page
 			*/
-			function createLayer() {
+			function createLayers() {
 				var params = {};
 				$( 'input[type="number"]' ).each( function() {
 					params[ $( this ).attr( 'id' ) ] = parseInt( $( this ).val() );
 				});
+				
+				// Convert float params to correct type:
+				params.excitationMin = parseFloat( params.excitationMin );
+				params.excitationMax = parseFloat( params.excitationMax );
+				params.excitationXMidpoint = parseFloat( params.excitationXMidpoint );
+				params.excitationSteepness = parseFloat( params.excitationSteepness );
 				
 				// Create a grid depiction of the input cells
 				inputCtx.canvas.width = 1024;
@@ -334,22 +400,32 @@
 				inputGrid = createGridImage( 1024, 1, cellHeight, inputCtx );
 				inputCtx.putImageData( inputGrid, 0, 0 );
 				
-				// Create a grid depiction of the layer cells
+				// Create a grid depiction of the TM layer cells
 				layerCtx.canvas.width = params.columnCount;
 				layerCtx.canvas.height = params.cellsPerColumn * cellHeight;
 				layerGrid = createGridImage( params.columnCount, params.cellsPerColumn, cellHeight, layerCtx );
 				layerCtx.putImageData( layerGrid, 0, 0 );
 				
-				// Create the input cells and layer
+				// Create a grid depiction of the TP layer cells
+				poolingCtx.canvas.width = params.columnCount;
+				poolingCtx.canvas.height = params.cellsPerColumn * cellHeight;
+				poolingGrid = createGridImage( params.columnCount, params.cellsPerColumn, cellHeight, poolingCtx );
+				poolingCtx.putImageData( poolingGrid, 0, 0 );
+				
+				// Create the input cells and TM layer
 				htmController.clear();
-				htmController.createLayer( params );
+				htmController.createLayer( params, TM_LAYER );
+				
+				// Create the pooling layer
+				params.potentialPercent = params.tpPotentialPercent;
+				htmController.createLayer( params, TP_LAYER, [0] );
 			}
 			
 			
 			/**
 			* Clears the data and DOM elements from the simulation
 			*/
-			function destroyLayer() {
+			function destroyLayers() {
 				// Remove DOM elements from the simulation
 				$( "#layer-body" ).remove();
 				$( "#history" ).text( "" );
@@ -372,11 +448,13 @@
 				// Add this note to the history
 				$( "#history" ).append( note.toUpperCase() + " " );
 				
-				// Spatial Pooling (SP) phase
+				// Activate TM layer
 				htmController.spatialPooling( 0, [notes[note]], true );
-				
-				// Temporal Memory (TM) phase
 				htmController.temporalMemory( 0, true );
+				
+				// Activate TP layer
+				htmController.spatialPooling( 1, [], true );
+				htmController.temporalMemory( 1, true );
 				
 				// Train cells in input layer to predict next input
 				htmController.inputMemory( 0 );
@@ -384,6 +462,7 @@
 				// Update the canvases displaying input and layer cell states
 				drawInputCells();
 				drawLayerCells();
+				drawPoolingCells();
 				
 				// Predict which note will play next
 				predictNote();
@@ -539,6 +618,27 @@
 					}
 				}
 				layerCtx.putImageData( layerCellsImage, 0, 0 );
+			}
+			
+			
+			/*
+			* Draw the predictive and active cells on the layer grid canvas
+			*/
+			function drawPoolingCells() {
+				var x, y, column, cell;
+				var layer = htmController.layers[1];
+				poolingCellsImage = poolingCtx.createImageData( poolingGrid );
+				poolingCellsImage.data.set( poolingGrid.data );
+				for( x = 0; x < layer.columns.length; x++ ) {
+					column = layer.columns[x];
+					for( y = 0; y < column.cells.length; y++ ) {
+						cell = column.cells[y];
+						if( cell.active || cell.predictive ) {
+							drawCell( x, y, layer.columns.length, poolingCellsImage, cell.active, cell.predictive );
+						}
+					}
+				}
+				poolingCtx.putImageData( poolingCellsImage, 0, 0 );
 			}
 			
 			/*
