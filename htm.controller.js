@@ -566,7 +566,7 @@ function HTMController() {
 				{
 					if( cell.active ) {
 						// Correct prediction.  Train it to better align with activity.
-						my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params, timestep );
+						my.trainSegment( segment, cellMatrixTx.learningCellHistory[0], cellMatrixRx.params, timestep );
 					} else {
 						// Wrong prediction.  Degrade connections on this segment.
 						for( s = 0; s < segment.synapses.length; s++ ) {
@@ -618,7 +618,7 @@ function HTMController() {
 							&& segment.activeSynapsesHistory[0].length > 0 )
 						{
 							// Found a matching segment.  Train it to better align with activity.
-							my.trainSegment( segment, cellMatrixTx.activeCellHistory[0], cellMatrixRx.params, timestep );
+							my.trainSegment( segment, cellMatrixTx.learningCellHistory[0], cellMatrixRx.params, timestep );
 						} else {
 							// No matching segment.  Create a new one.
 							segment = new Segment( inputType, cell, cell.column );
@@ -687,32 +687,34 @@ function HTMController() {
 		} else {
 			segments = segment.cellRx.proximalSegments;
 		}
-		// Connect segment with random sampling of previously active cells, up to max new synapse count
-		for( i = 0; i < randomIndexes.length; i++ ) {
-			if( segment.synapses.length >= params.maxSynapsesPerSegment ) {
-				// Cannot add any more synapses to this segment.  Check if we can add a new segment.
-				if( segments.length >= params.maxSegmentsPerCell ) {
-					// Cannot add any more segments to this cell.  Select least recently used and remove it.
-					segmentIndex = Math.floor( Math.random() * segments.length );
-					lruSegmentIndex = segmentIndex;  // Start with a random segment index
-					// Loop through segments to find least recently used
-					for( s = 0; s < segments.length; s++ ) {
-						segmentIndex++;
-						if( segmentIndex >=  segments.length ) {
-							segmentIndex = 0;  // Wrap back around to beginning of list
-						}
-						// Check if this segment is less recently used than selected one
-						if( segments[segmentIndex].lastUsedTimestep < segments[lruSegmentIndex].lastUsedTimestep ) {
-							lruSegmentIndex = segmentIndex;  // Used less recently.. select this one instead
+		if( segment.activeSynapsesHistory[0].length < params.maxNewSynapseCount ) {
+			// Connect segment with random sampling of previously active cells, up to max new synapse count
+			for( i = 0; i < randomIndexes.length; i++ ) {
+				if( segment.synapses.length >= params.maxSynapsesPerSegment ) {
+					// Cannot add any more synapses to this segment.  Check if we can add a new segment.
+					if( segments.length >= params.maxSegmentsPerCell ) {
+						// Cannot add any more segments to this cell.  Select least recently used and remove it.
+						segmentIndex = Math.floor( Math.random() * segments.length );
+						lruSegmentIndex = segmentIndex;  // Start with a random segment index
+						// Loop through segments to find least recently used
+						for( s = 0; s < segments.length; s++ ) {
+							segmentIndex++;
+							if( segmentIndex >=  segments.length ) {
+								segmentIndex = 0;  // Wrap back around to beginning of list
+							}
+							// Check if this segment is less recently used than selected one
+							if( segments[segmentIndex].lastUsedTimestep < segments[lruSegmentIndex].lastUsedTimestep ) {
+								lruSegmentIndex = segmentIndex;  // Used less recently.. select this one instead
+							}
 						}
 					}
+					// Add new segment to this cell
+					segment = new Segment( segment.type, segment.cellRx, segment.cellRx.column );
+					segment.lastUsedTimestep = timestep;
 				}
-				// Add new segment to this cell
-				segment = new Segment( segment.type, segment.cellRx, segment.cellRx.column );
-				segment.lastUsedTimestep = timestep;
+				// Add new synapse to this segment
+				synapse = new Synapse( activeCells[randomIndexes[i]], segment, params.initialPermanence );
 			}
-			// Add new synapse to this segment
-			synapse = new Synapse( activeCells[randomIndexes[i]], segment, params.initialPermanence );
 		}
 	}
 	
