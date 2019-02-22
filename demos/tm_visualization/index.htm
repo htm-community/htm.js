@@ -332,25 +332,24 @@
 				$( document ).on( "mouseenter", "td.cell", function() {
 					var i, w, tgtElem, segment;
 					var cell = htmController.layers[0].cellMatrix.cells[$( this ).attr( "data-index" )];
-					if( cell.active || cell.predictive ) {
-						$( ".line" ).remove();
-					}
-					if( cell.active ) {
-						for( i = 0; i < cell.axonSynapses.length; i++ ) {
-							tgtElem = $( "td#cell_" + cell.axonSynapses[i].segment.cellRx.index );
-							connectGridCells( $( this ), tgtElem, "#ff0000" );
+					$( ".line" ).remove();
+					for( i = 0; i < cell.axonSynapses.length; i++ ) {
+						tgtElem = $( "td#cell_" + cell.axonSynapses[i].segment.cellRx.index );
+						if( cell.active ) {
+							drawCellConnections( $( this ), tgtElem, "#ff0000" );
+						} else {
+							drawCellConnections( $( this ), tgtElem, "#ff6666" );
 						}
 					}
-					if( cell.predictive ) {
-						$( ".line" ).remove();
-						for( i = 0; i < cell.distalSegments.length; i++ ) {
-							segment = cell.distalSegments[i];
-							if( segment.connectedSynapses.length >= params.activationThreshold ) {
-								for( w = 0; w < segment.connectedSynapses.length; w++ ) {
-									tgtElem = $( "td#cell_" + segment.connectedSynapses[w].cellTx.index );
-									connectGridCells( $( this ), tgtElem, "#0000ff" );
-								}
-							}
+					for( i = 0; i < cell.distalSegments.length; i++ ) {
+						segment = cell.distalSegments[i];
+						for( w = 0; w < segment.synapses.length; w++ ) {
+							tgtElem = $( "td#cell_" + segment.synapses[w].cellTx.index );
+							drawCellConnections( $( this ), tgtElem, "#6666cc" );
+						}
+						for( w = 0; w < segment.connectedSynapses.length; w++ ) {
+							tgtElem = $( "td#cell_" + segment.connectedSynapses[w].cellTx.index );
+							drawCellConnections( $( this ), tgtElem, "#0000ff" );
 						}
 					}
 				} );
@@ -604,7 +603,7 @@
 			/*
 			* Draw a colored line between two cells in the grid
 			*/
-			function connectGridCells( elem1, elem2, color ) {
+			function drawCellConnections( elem1, elem2, color ) {
 				drawLine(
 					elem1.offset().left + 5,
 					elem1.offset().top + 3,
