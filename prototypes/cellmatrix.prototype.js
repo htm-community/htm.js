@@ -55,15 +55,18 @@ function CellMatrix( params, cells ) {
 							synapse.segment.activeSynapsesHistory.length = my.params.historyLength;
 						}
 						synapse.segment.activeSynapses = [];
-					}
-					// Make sure we haven't already processed this segment's connected synapses list
-					if( synapse.segment.connectedSynapses.length > 0 ) {
 						// Save connected synapses history, then clear in preparation for new input
 						synapse.segment.connectedSynapsesHistory.unshift( synapse.segment.connectedSynapses );
 						if( synapse.segment.connectedSynapsesHistory.length > my.params.historyLength ) {
 							synapse.segment.connectedSynapsesHistory.length = my.params.historyLength;
 						}
 						synapse.segment.connectedSynapses = [];
+						// Save predicted active synapses history, then clear in preparation for new input
+						synapse.segment.predictedActiveSynapsesHistory.unshift( synapse.segment.predictedActiveSynapses );
+						if( synapse.segment.predictedActiveSynapsesHistory.length > my.params.historyLength ) {
+							synapse.segment.predictedActiveSynapsesHistory.length = my.params.historyLength;
+						}
+						synapse.segment.predictedActiveSynapses = [];
 					}
 				}
 			}

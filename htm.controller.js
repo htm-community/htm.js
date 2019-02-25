@@ -468,6 +468,10 @@ function HTMController() {
 					// This is the segment of a cell.  Determine if state should be updated.
 					// First, add to segment's active synapses list
 					synapse.segment.activeSynapses.push( synapse );
+					if( cell.predictedActive ) {
+						// Transmitting cell was correctly predicted, add synapse to predicted active list
+						synapse.segment.predictedActiveSynapses.push( synapse );
+					}
 					if( synapse.permanence >= cellMatrix.params.connectedPermanence ) {
 						// Synapse connected, add to connected synapses list
 						synapse.segment.connectedSynapses.push( synapse );
@@ -529,7 +533,7 @@ function HTMController() {
 	 * good predictions and degrades wrong predictions.
 	 */
 	this.trainCellMatrix = function( cellMatrixTx, cellMatrixRx, inputType, timestep ) {
-		var c, s, randomIndexes, cell, segment, synapse;
+		var c, s, p, sourcePredicted, randomIndexes, cell, segment, synapse;
 		
 		if( ( cellMatrixTx.activeCellHistory.length > 0 ) && ( cellMatrixRx.predictiveCellHistory.length > 0 ) ) {
 			// Enforce correct predictions, degrade wrong predictions
@@ -568,12 +572,25 @@ function HTMController() {
 						// Correct prediction.  Train it to better align with activity.
 						my.trainSegment( segment, cellMatrixTx.learningCellHistory[0], cellMatrixRx.params, timestep );
 					} else {
-						// Wrong prediction.  Degrade connections on this segment.
+						// Wrong prediction.
 						for( s = 0; s < segment.synapses.length; s++ ) {
 							synapse = segment.synapses[s];
-							synapse.permanence -= cellMatrixRx.params.predictedSegmentDecrement;
-							if( synapse.permanence < 0 ) {
-								synapse.permanence = 0;
+							// Check if transmitting cell was itself predicted
+							sourcePredicted = false;
+							if( segment.predictedActiveSynapsesHistory.length > 0 ) {
+								for( p = 0; p < segment.predictedActiveSynapsesHistory[0].length; p++ ) {
+									if( segment.predictedActiveSynapsesHistory[0][p] === synapse ) {
+										sourcePredicted = true;
+									}
+								}
+							}
+							// Only punish wrong predictions if the source minicolumn was not bursting (fixes some undesirable forgetfulness)
+							if( sourcePredicted ) {
+								// Degrade this connection.
+								synapse.permanence -= cellMatrixRx.params.predictedSegmentDecrement;
+								if( synapse.permanence < 0 ) {
+									synapse.permanence = 0;
+								}
 							}
 						}
 					}
@@ -677,6 +694,7 @@ function HTMController() {
 			synapse.permanence -= params.permanenceDecrement;
 			if( synapse.permanence < 0 ) {
 				synapse.permanence = 0;
+				// TODO: Delete synapse to free resources
 			}
 		}
 		// Select the relevant list of segments, based on type
